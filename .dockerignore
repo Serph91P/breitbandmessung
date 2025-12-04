@@ -1,0 +1,42 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+*.md
+
+# Development files
+.vscode
+.idea
+*.log
+
+# Test files
+test-*.sh
+debug-*.sh
+
+# Build artifacts
+*.pyc
+__pycache__/
+*.so
+*.egg-info/
+
+# Local data
+config/
+messprotokolle/
+export/
+
+# Docker
+docker-compose.override.yml
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backup files
+*.bak
+*.backup
+*~

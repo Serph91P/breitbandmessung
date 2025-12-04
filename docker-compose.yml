@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  breitbandmessung:
+    build: .
+    image: breitbandmessung:simple
+    container_name: breitbandmessung
+    restart: unless-stopped
+    
+    # Volumes - Passe den Pfad für deinen Unraid-Server an!
+    volumes:
+      # CSV-Dateien werden hier gespeichert
+      - ${EXPORT_PATH:-./messprotokolle}:/export
+      
+      # Optional: Config überschreiben
+      - ./config.ini:/usr/src/app/config/config.ini:ro
+    
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
