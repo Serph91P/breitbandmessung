@@ -479,24 +479,34 @@ def run_speedtest():
                 
                 # Screenshot-URLs - ALLE Cable-Seiten!
                 cable_pages = [
-                    ("cable_overview", f"http://{FRITZBOX_HOST}/#/cable"),
-                    ("cable_channels", f"http://{FRITZBOX_HOST}/#/cable/channels"),
-                    ("cable_spectrum", f"http://{FRITZBOX_HOST}/#/cable/spectrum"),
-                    ("cable_utilization", f"http://{FRITZBOX_HOST}/#/cable/utilization")
+                    ("cable_overview", f"http://{FRITZBOX_HOST}/#/cable", "h2"),  # Hauptüberschrift
+                    ("cable_channels", f"http://{FRITZBOX_HOST}/#/cable/channels", "table"),  # Kanaltabelle
+                    ("cable_spectrum", f"http://{FRITZBOX_HOST}/#/cable/spectrum", "svg"),  # Spektrum-Graph
+                    ("cable_utilization", f"http://{FRITZBOX_HOST}/#/cable/utilization", "svg")  # Auslastungs-Graph
                 ]
                 
                 screenshot_count = 0
-                for page_name, url in cable_pages:
+                for page_name, url, wait_element in cable_pages:
                     try:
                         print(f"  → {page_name}: {url}")
                         browser.get(url)
-                        time.sleep(5)  # Warte auf moderne UI
+                        
+                        # Warte bis Seite geladen ist (max 15 Sekunden)
+                        try:
+                            wait = WebDriverWait(browser, 15)
+                            wait.until(EC.presence_of_element_located((By.TAG_NAME, wait_element)))
+                            print(f"    ✓ Seite geladen ({wait_element} gefunden)")
+                        except:
+                            print(f"    ⏳ Timeout - mache trotzdem Screenshot")
+                        
+                        # Extra Pause für Animationen/Rendering
+                        time.sleep(2)
                         
                         # Screenshot
                         screenshot_name = f"FritzBox_{page_name}_{now.strftime('%d_%m_%Y_%H_%M_%S')}.png"
                         screenshot_path = os.path.join(EXPORT_PATH, screenshot_name)
                         browser.save_screenshot(screenshot_path)
-                        print(f"  ✓ {screenshot_name}")
+                        print(f"    📸 {screenshot_name}")
                         screenshot_count += 1
                     except Exception as e:
                         print(f"  ⚠️  {page_name} Fehler: {e}")
