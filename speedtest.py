@@ -458,21 +458,25 @@ def run_speedtest():
                 if FRITZBOX_PASSWORD:
                     print(f"  🔐 Login in FritzBox...")
                     browser.get(f"http://{FRITZBOX_HOST}")
-                    time.sleep(3)
+                    time.sleep(2)
                     
                     try:
-                        # Suche Passwort-Feld
+                        # Passwort-Feld finden und ausfüllen (Username ist Dropdown, brauchen wir nicht)
                         password_field = browser.find_element(By.ID, "uiPass")
+                        password_field.clear()
                         password_field.send_keys(FRITZBOX_PASSWORD)
                         
-                        # Submit
+                        # Login-Button klicken
                         login_button = browser.find_element(By.ID, "submitLoginBtn")
                         login_button.click()
-                        time.sleep(3)
+                        
+                        # Warte bis Login durch ist
+                        time.sleep(2)
                         print(f"  ✓ Login erfolgreich")
                     except Exception as e:
-                        print(f"  ⚠️  Auto-Login fehlgeschlagen: {e}")
-                        print(f"  → Versuche ohne Login...")
+                        print(f"  ⚠️  Login fehlgeschlagen: {e}")
+                        print(f"  → Tipp: Prüfe Passwort in config.ini")
+                        print(f"  → Oder FritzBox ist schon eingeloggt (Session aktiv)")
                 
                 # Screenshot-URLs - ALLE Cable-Seiten!
                 cable_pages = [
