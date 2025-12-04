@@ -19,9 +19,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Installiere Python-Pakete (nur Selenium benötigt!)
+# Installiere Python-Pakete (Selenium + Requests für FritzBox)
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir selenium
+    pip3 install --no-cache-dir selenium requests
 
 # Installiere Geckodriver
 RUN set -eux; \
