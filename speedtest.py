@@ -452,37 +452,63 @@ def run_speedtest():
         if FRITZBOX_ENABLED and FRITZBOX_SCREENSHOT:
             print("\n📡 Erstelle FritzBox Cable Screenshots...")
             try:
-                # Moderne FritzBox Cable-Channels Seite
-                fritzbox_url = f"http://{FRITZBOX_HOST}/#/cable/channels"
-                print(f"  → Öffne {fritzbox_url}")
-                browser.get(fritzbox_url)
-                time.sleep(5)  # Warte länger - moderne UI braucht Zeit zum Laden
-                
-                # Screenshot 1: Vollbild
                 now = datetime.now()
-                fb_screenshot = f"FritzBox_Cable_Channels_{now.strftime('%d_%m_%Y_%H_%M_%S')}.png"
-                fb_screenshot_path = os.path.join(EXPORT_PATH, fb_screenshot)
-                browser.save_screenshot(fb_screenshot_path)
-                print(f"  ✓ Screenshot: {fb_screenshot}")
                 
-                # Versuche auch die alte URL (Fallback)
-                try:
-                    old_url = f"http://{FRITZBOX_HOST}/internet/inetstat_monitor.lua"
-                    browser.get(old_url)
+                # Login in FritzBox (falls Passwort gesetzt)
+                if FRITZBOX_PASSWORD:
+                    print(f"  🔐 Login in FritzBox...")
+                    browser.get(f"http://{FRITZBOX_HOST}")
                     time.sleep(3)
-                    fb_screenshot_old = f"FritzBox_Cable_Monitor_{now.strftime('%d_%m_%Y_%H_%M_%S')}.png"
-                    browser.save_screenshot(os.path.join(EXPORT_PATH, fb_screenshot_old))
-                    print(f"  ✓ Screenshot (alt): {fb_screenshot_old}")
-                except:
-                    pass
+                    
+                    try:
+                        # Suche Passwort-Feld
+                        password_field = browser.find_element(By.ID, "uiPass")
+                        password_field.send_keys(FRITZBOX_PASSWORD)
+                        
+                        # Submit
+                        login_button = browser.find_element(By.ID, "submitLoginBtn")
+                        login_button.click()
+                        time.sleep(3)
+                        print(f"  ✓ Login erfolgreich")
+                    except Exception as e:
+                        print(f"  ⚠️  Auto-Login fehlgeschlagen: {e}")
+                        print(f"  → Versuche ohne Login...")
                 
-                print(f"  📊 Zeigt alle DOCSIS 3.0/3.1 Kanäle!")
-                print(f"  📊 Mit Power, MER/MSE und Fehlerzählern!")
+                # Screenshot-URLs - ALLE Cable-Seiten!
+                cable_pages = [
+                    ("cable_overview", f"http://{FRITZBOX_HOST}/#/cable"),
+                    ("cable_channels", f"http://{FRITZBOX_HOST}/#/cable/channels"),
+                    ("cable_spectrum", f"http://{FRITZBOX_HOST}/#/cable/spectrum"),
+                    ("cable_utilization", f"http://{FRITZBOX_HOST}/#/cable/utilization")
+                ]
+                
+                screenshot_count = 0
+                for page_name, url in cable_pages:
+                    try:
+                        print(f"  → {page_name}: {url}")
+                        browser.get(url)
+                        time.sleep(5)  # Warte auf moderne UI
+                        
+                        # Screenshot
+                        screenshot_name = f"FritzBox_{page_name}_{now.strftime('%d_%m_%Y_%H_%M_%S')}.png"
+                        screenshot_path = os.path.join(EXPORT_PATH, screenshot_name)
+                        browser.save_screenshot(screenshot_path)
+                        print(f"  ✓ {screenshot_name}")
+                        screenshot_count += 1
+                    except Exception as e:
+                        print(f"  ⚠️  {page_name} Fehler: {e}")
+                
+                if screenshot_count > 0:
+                    print(f"\n  📸 {screenshot_count} FritzBox Screenshots erstellt!")
+                    print(f"  📊 Zeigt ALLE DOCSIS-Daten: Kanäle, Spektrum, Auslastung")
+                else:
+                    print(f"\n  ⚠️  Keine Screenshots erstellt - prüfe FritzBox-Zugriff")
                 
             except Exception as e:
                 print(f"⚠️  FritzBox Screenshot Fehler: {e}")
-                print(f"     Tipp: Öffne manuell http://{FRITZBOX_HOST}/#/cable/channels")
-                print(f"     Oder: http://{FRITZBOX_HOST}/internet/inetstat_monitor.lua")
+                print(f"     Tipp: Setze FritzBox-Passwort in config.ini:")
+                print(f"     [FritzBox]")
+                print(f"     password = dein-passwort")
         
         print("\n✅ Fertig!\n")
         
