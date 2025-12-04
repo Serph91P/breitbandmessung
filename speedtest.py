@@ -461,22 +461,21 @@ def run_speedtest():
                     time.sleep(2)
                     
                     try:
-                        # Passwort-Feld finden und ausfüllen (Username ist Dropdown, brauchen wir nicht)
-                        password_field = browser.find_element(By.ID, "uiPass")
-                        password_field.clear()
+                        # Custom Web Component - nutze das INNERE Input-Feld!
+                        # <password-input id="uiPass"> enthält <input id="uiPassInput">
+                        password_field = browser.find_element(By.ID, "uiPassInput")
                         password_field.send_keys(FRITZBOX_PASSWORD)
                         
                         # Login-Button klicken
                         login_button = browser.find_element(By.ID, "submitLoginBtn")
                         login_button.click()
                         
-                        # Warte bis Login durch ist
-                        time.sleep(2)
+                        # Warte bis Login durch ist (URL ändert sich nach Login)
+                        time.sleep(3)
                         print(f"  ✓ Login erfolgreich")
                     except Exception as e:
                         print(f"  ⚠️  Login fehlgeschlagen: {e}")
-                        print(f"  → Tipp: Prüfe Passwort in config.ini")
-                        print(f"  → Oder FritzBox ist schon eingeloggt (Session aktiv)")
+                        print(f"  → Versuche ohne Login (Session evtl. schon aktiv)...")
                 
                 # Screenshot-URLs - ALLE Cable-Seiten!
                 cable_pages = [
