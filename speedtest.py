@@ -502,12 +502,32 @@ def run_speedtest():
                         # Extra Pause für Animationen/Rendering
                         time.sleep(2)
                         
-                        # Screenshot
+                        # FULLPAGE Screenshot - setze Window-Größe auf volle Content-Höhe
+                        try:
+                            # Hole gesamte Seiten-Dimensionen
+                            total_width = browser.execute_script("return document.body.scrollWidth")
+                            total_height = browser.execute_script("return document.body.scrollHeight")
+                            
+                            # Setze Browser-Fenster auf volle Größe (max 20000px für Performance)
+                            browser.set_window_size(1920, min(total_height + 200, 20000))
+                            
+                            # Kurz warten bis Resize fertig
+                            time.sleep(1)
+                            
+                            print(f"    📐 Fullpage: {total_width}x{total_height}px")
+                        except Exception as e:
+                            print(f"    ⚠️  Fullpage-Resize fehlgeschlagen: {e}")
+                        
+                        # Screenshot der vollen Seite
                         screenshot_name = f"FritzBox_{page_name}_{now.strftime('%d_%m_%Y_%H_%M_%S')}.png"
                         screenshot_path = os.path.join(EXPORT_PATH, screenshot_name)
                         browser.save_screenshot(screenshot_path)
                         print(f"    📸 {screenshot_name}")
                         screenshot_count += 1
+                        
+                        # Reset Window-Größe für nächste Seite
+                        browser.set_window_size(1920, 1080)
+                        
                     except Exception as e:
                         print(f"  ⚠️  {page_name} Fehler: {e}")
                 
