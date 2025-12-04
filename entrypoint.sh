@@ -13,7 +13,8 @@ CONFIG_FILE="/usr/src/app/config/config.ini"
 get_config() {
     local key=$1
     local section=$2
-    grep -A 20 "\[$section\]" "$CONFIG_FILE" | grep "^$key" | cut -d'=' -f2 | tr -d ' '
+    # Lese Wert und entferne nur führende/nachfolgende Leerzeichen
+    grep -A 20 "\[$section\]" "$CONFIG_FILE" | grep "^$key" | cut -d'=' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/#.*//'
 }
 
 # Lade Einstellungen
@@ -58,22 +59,44 @@ if [ "$RUN_ONCE" = "false" ]; then
     echo "  ⏰ Richte Cron ein..."
     echo "=========================================="
     
+    # Validiere Cron-Schedule
+    if [ -z "$CRON_SCHEDULE" ]; then
+        echo "❌ FEHLER: Kein Cron-Schedule konfiguriert!"
+        echo "Bitte prüfe config.ini"
+        exit 1
+    fi
+    
+    echo "📅 Cron Schedule: '$CRON_SCHEDULE'"
+    
     # Exportiere Umgebung für Cron
     printenv | sed 's/^\(.*\)$/export \1/g' > /root/env.sh
     
     # Erstelle Cron-Job
-    echo "$CRON_SCHEDULE . /root/env.sh && /usr/src/app/speedtest.py" | crontab -
+    echo "$CRON_SCHEDULE . /root/env.sh && /usr/src/app/speedtest.py >> /proc/1/fd/1 2>&1" | crontab -
     
-    echo "✓ Cron Schedule: $CRON_SCHEDULE"
+    # Prüfe ob Crontab erfolgreich war
+    if [ $? -ne 0 ]; then
+        echo "❌ FEHLER: Ungültiger Cron-Schedule!"
+        echo "Format: Minute Stunde Tag Monat Wochentag"
+        echo "Beispiel: 0 */2 * * *"
+        exit 1
+    fi
+    
+    echo "✓ Cron eingerichtet"
     echo ""
-    echo "Container läuft dauerhaft..."
-    echo "Nächste Messung gemäß Zeitplan"
+    echo "📊 Aktuelle Crontab:"
+    crontab -l
+    echo ""
+    echo "🔄 Container läuft dauerhaft..."
+    echo "   Nächste Messung gemäß Zeitplan"
     echo ""
     
     # Starte Cron
     cron -f
 else
-    echo "Einmal-Modus - führe Messung durch..."
+    echo "🔄 Einmal-Modus - führe Messung durch..."
     /usr/src/app/speedtest.py
+    echo ""
+    echo "✅ Container beendet sich"
     exit 0
 fi
