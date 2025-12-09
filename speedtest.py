@@ -2,6 +2,8 @@
 """
 Breitbandmessung - Einfacher Speedtest mit CSV-Export
 Führt automatisierte Messungen über breitbandmessung.de durch
+
+Version 2.0 - Mit verbesserter FritzBox Cable Integration
 """
 from selenium import webdriver
 from selenium.webdriver.firefox.service import Service
@@ -17,9 +19,15 @@ import os
 import csv
 import glob
 import shutil
-import requests
-from requests.auth import HTTPDigestAuth
-import xml.etree.ElementTree as ET
+import json
+
+# FritzBox Cable Modul (neues verbessertes Modul)
+try:
+    from fritzbox_cable import FritzBoxCable
+    FRITZBOX_MODULE_AVAILABLE = True
+except ImportError:
+    FRITZBOX_MODULE_AVAILABLE = False
+    print("⚠️  fritzbox_cable.py nicht gefunden - FritzBox-Integration eingeschränkt")
 
 # Lade Konfiguration
 config = configparser.ConfigParser()
@@ -52,217 +60,129 @@ DOWNLOAD_RESULT = "button.px-0:nth-child(1)"
 
 
 def get_fritzbox_cable_info():
-    """Liest Kabel-DOCSIS Informationen von der FritzBox aus"""
+    """
+    Liest ALLE verfügbaren Kabel-Daten von der FritzBox aus.
+    Nutzt das neue FritzBoxCable-Modul mit Session-basiertem Login.
+    
+    Sammelt:
+    - DOCSIS Kanaldaten (Fehler, Signalpegel, MER/MSE)
+    - Kabel-Übersicht (Geschwindigkeit, Verbindungsstatus)
+    - Verbindungsinfo (IP, Verbindungsdauer)
+    - Traffic-Daten (aktuelle Auslastung)
+    """
     if not FRITZBOX_ENABLED:
         return None
     
+    if not FRITZBOX_MODULE_AVAILABLE:
+        print("⚠️  FritzBox-Modul nicht verfügbar", flush=True)
+        return None
+    
     try:
-        print("\n📡 Lese FritzBox Cable-Informationen...", flush=True)
+        print("\n📡 Lese FritzBox Daten (ALLE verfügbaren)...", flush=True)
         
-        # Versuche erst die JSON-API (moderne FritzBoxen)
-        json_data = get_fritzbox_cable_json()
-        if json_data:
-            return json_data
-        
-        # FritzBox Cable Info über TR-064
-        url = f"http://{FRITZBOX_HOST}:49000/igdupnp/control/WANCableLinkConfig1"
-        
-        headers = {
-            'Content-Type': 'text/xml; charset="utf-8"',
-            'SOAPAction': 'urn:dslforum-org:service:WANCableLinkConfig:1#GetCableInfo'
-        }
-        
-        soap_body = """<?xml version="1.0" encoding="utf-8"?>
-<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
-    <s:Body>
-        <u:GetCableInfo xmlns:u="urn:dslforum-org:service:WANCableLinkConfig:1" />
-    </s:Body>
-</s:Envelope>"""
-        
-        auth = None
-        if FRITZBOX_USER and FRITZBOX_PASSWORD:
-            auth = HTTPDigestAuth(FRITZBOX_USER, FRITZBOX_PASSWORD)
-        
-        response = requests.post(url, data=soap_body, headers=headers, auth=auth, timeout=10)
-        
-        if response.status_code == 200:
-            root = ET.fromstring(response.content)
+        # Nutze das neue Modul mit Session-basiertem Login
+        with FritzBoxCable(FRITZBOX_HOST, FRITZBOX_USER, FRITZBOX_PASSWORD) as fb:
+            # Hole ALLE Daten
+            all_data = fb.get_all_cable_data()
             
-            def get_value(tag):
-                elem = root.find(f".//{{{root.tag.split('}')[0][1:]}}}New{tag}")
-                if elem is None:
-                    elem = root.find(f".//New{tag}")
-                return elem.text if elem is not None else "N/A"
+            if not all_data['success']:
+                print("❌ Konnte keine Daten abrufen", flush=True)
+                return None
             
-            # Sammle Downstream-Kanäle
-            downstream_channels = []
-            upstream_channels = []
+            parsed = all_data['parsed']
+            cable_ov = all_data.get('cable_overview') or {}
+            connection = all_data.get('connection') or {}
+            traffic = all_data.get('traffic') or {}
             
-            # Parse Downstream Info (kann mehrere Formate haben)
-            ds_info = get_value('DownstreamChannelStatus')
-            if ds_info and ds_info != "N/A":
-                # Parse Channel-String (meist komma-separiert)
-                for line in ds_info.split('\n'):
-                    if line.strip():
-                        downstream_channels.append(line.strip())
+            # Extrahiere Kabel-Übersicht Daten
+            ds_speed = 0
+            us_speed = 0
+            connection_time = ""
             
-            # Parse Upstream Info
-            us_info = get_value('UpstreamChannelStatus')
-            if us_info and us_info != "N/A":
-                for line in us_info.split('\n'):
-                    if line.strip():
-                        upstream_channels.append(line.strip())
+            if cable_ov:
+                # Versuche Geschwindigkeiten zu extrahieren
+                if 'downstream' in cable_ov:
+                    ds_speed = cable_ov.get('downstream', {}).get('currentRate', 0)
+                if 'upstream' in cable_ov:
+                    us_speed = cable_ov.get('upstream', {}).get('currentRate', 0)
+                connection_time = cable_ov.get('connectionTime', '')
             
+            # Extrahiere Traffic-Daten (aktuelle Auslastung)
+            current_ds_bps = 0
+            current_us_bps = 0
+            
+            if traffic:
+                # Traffic kann verschiedene Formate haben
+                if 'downstream' in traffic:
+                    current_ds_bps = traffic.get('downstream', {}).get('currentBps', 0)
+                if 'upstream' in traffic:
+                    current_us_bps = traffic.get('upstream', {}).get('currentBps', 0)
+            
+            # Baue umfassendes Ergebnis
             cable_info = {
-                'downstream_frequency': get_value('DownstreamFrequency'),
-                'downstream_powerLevel': get_value('DownstreamPowerLevel'),
-                'downstream_modulation': get_value('DownstreamModulation'),
-                'upstream_frequency': get_value('UpstreamFrequency'),
-                'upstream_powerLevel': get_value('UpstreamPowerLevel'),
-                'upstream_modulation': get_value('UpstreamModulation'),
-                'cable_status': get_value('CableStatus'),
-                'link_status': get_value('LinkStatus'),
-                'downstream_channels': downstream_channels,
-                'upstream_channels': upstream_channels,
-                'total_codewords': get_value('TotalCodewords'),
-                'corrected_codewords': get_value('CorrectedCodewords'),
-                'uncorrected_codewords': get_value('UncorrectedCodewords')
+                'source': 'fritzbox_cable_module_v2',
+                'timestamp': all_data['timestamp'],
+                
+                # DOCSIS Fehlerstatistik
+                'total_non_corr_errors': parsed['summary']['total_non_corr_errors'],
+                'total_corr_errors': parsed['summary']['total_corr_errors'],
+                'problem_channels': parsed['summary']['problem_channels'],
+                
+                # Kanalzählung
+                'docsis31_ds_channels': len(parsed['downstream']['docsis31']),
+                'docsis30_ds_channels': len(parsed['downstream']['docsis30']),
+                'docsis31_us_channels': len(parsed['upstream']['docsis31']),
+                'docsis30_us_channels': len(parsed['upstream']['docsis30']),
+                
+                # Detaillierte Kanaldaten
+                'downstream_channels': parsed['downstream']['docsis31'] + parsed['downstream']['docsis30'],
+                'upstream_channels': parsed['upstream']['docsis31'] + parsed['upstream']['docsis30'],
+                
+                # Kabel-Übersicht
+                'sync_ds_speed_kbps': ds_speed,
+                'sync_us_speed_kbps': us_speed,
+                'connection_time': connection_time,
+                
+                # Aktuelle Auslastung
+                'current_ds_bps': current_ds_bps,
+                'current_us_bps': current_us_bps,
+                
+                # Rohdaten für spätere Analyse
+                'raw_all_data': all_data
             }
             
-            print("✓ FritzBox Cable-Daten gelesen", flush=True)
-            print(f"  📶 Status: {cable_info['link_status']}", flush=True)
-            print(f"  ⬇️  Downstream: {cable_info['downstream_frequency']} MHz", flush=True)
-            print(f"  ⬆️  Upstream: {cable_info['upstream_frequency']} MHz", flush=True)
-            print(f"  🔴 Nicht korrigierbar: {cable_info['uncorrected_codewords']}", flush=True)
-            print(f"  � Korrigiert: {cable_info['corrected_codewords']}", flush=True)
+            # Berechne durchschnittliche Signalwerte
+            ds_power_levels = [ch.get('power_level', 0) for ch in cable_info['downstream_channels']]
+            if ds_power_levels:
+                cable_info['avg_ds_power_level'] = sum(ds_power_levels) / len(ds_power_levels)
+                cable_info['min_ds_power_level'] = min(ds_power_levels)
+                cable_info['max_ds_power_level'] = max(ds_power_levels)
+            
+            us_power_levels = [ch.get('power_level', 0) for ch in cable_info['upstream_channels']]
+            if us_power_levels:
+                cable_info['avg_us_power_level'] = sum(us_power_levels) / len(us_power_levels)
+            
+            # Zeige Zusammenfassung
+            print(f"✓ FritzBox Daten gelesen", flush=True)
+            print(f"  📊 DOCSIS 3.1: {cable_info['docsis31_ds_channels']} DS / {cable_info['docsis31_us_channels']} US Kanäle", flush=True)
+            print(f"  📊 DOCSIS 3.0: {cable_info['docsis30_ds_channels']} DS / {cable_info['docsis30_us_channels']} US Kanäle", flush=True)
+            print(f"  🔴 Nicht korrigierbar: {cable_info['total_non_corr_errors']:,}", flush=True)
+            print(f"  🟡 Korrigiert: {cable_info['total_corr_errors']:,}", flush=True)
+            if ds_speed:
+                print(f"  📶 Sync-Geschwindigkeit: {ds_speed/1000:.0f} Mbit/s DS / {us_speed/1000:.0f} Mbit/s US", flush=True)
+            if connection_time:
+                print(f"  ⏱️  Verbindungsdauer: {connection_time}", flush=True)
+            
+            # Zeige Problem-Kanäle
+            if cable_info['problem_channels']:
+                print(f"  🚨 PROBLEM-KANÄLE:", flush=True)
+                for ch in cable_info['problem_channels'][:3]:  # Top 3
+                    print(f"     Kanal {ch['channel_id']}: {ch['non_corr_errors']:,} Fehler", flush=True)
             
             return cable_info
-        else:
-            print(f"⚠️  FritzBox Fehler: HTTP {response.status_code}", flush=True)
-            print(f"     Tipp: Nutze FritzBox Web-Interface zum manuellen Export", flush=True)
-            return None
             
     except Exception as e:
         print(f"⚠️  FritzBox API Fehler: {e}", flush=True)
-        print(f"     Versuche Alternative: Web-Scraping...", flush=True)
-        return get_fritzbox_cable_via_web()
-
-
-def get_fritzbox_cable_json():
-    """Versuche FritzBox Cable-Daten über JSON API zu holen"""
-    try:
-        # Moderne FritzBox JSON-Endpoints (ohne Auth für lokale Zugriffe)
-        endpoints = [
-            f"http://{FRITZBOX_HOST}/data.lua?page=docInfo",
-            f"http://{FRITZBOX_HOST}/data.lua?page=cable",
-            f"http://{FRITZBOX_HOST}/query.lua?network=docsis_state",
-            f"http://{FRITZBOX_HOST}/internet/inetstat_monitor.lua?useajax=1&action=get_graphic"
-        ]
-        
-        for endpoint in endpoints:
-            try:
-                response = requests.get(endpoint, timeout=5)
-                if response.status_code == 200:
-                    # Versuche JSON zu parsen
-                    try:
-                        data = response.json()
-                        if data and len(str(data)) > 50:  # Nicht leer
-                            print(f"  ✓ JSON-Daten gefunden: {endpoint.split('/')[-1]}", flush=True)
-                            
-                            # Parse relevante Daten
-                            cable_info = {
-                                'source': 'json_api',
-                                'endpoint': endpoint,
-                                'raw_data': str(data)[:500],  # Erste 500 Zeichen
-                                'data': data
-                            }
-                            
-                            # Versuche Kanal-Daten zu extrahieren
-                            if 'downstream' in str(data).lower():
-                                print(f"  ✓ Downstream-Kanäle gefunden!", flush=True)
-                            if 'upstream' in str(data).lower():
-                                print(f"  ✓ Upstream-Kanäle gefunden!", flush=True)
-                            
-                            return cable_info
-                    except:
-                        pass
-            except:
-                continue
-        
-        print("  ℹ️  Keine JSON-API verfügbar", flush=True)
-        return None
-        
-    except Exception as e:
-        print(f"  ℹ️  JSON-API nicht erreichbar: {e}", flush=True)
-        return None
-
-
-def get_fritzbox_cable_via_web():
-    """Alternative: Lese Cable-Info direkt vom FritzBox Webinterface"""
-    try:
-        print("  → Versuche Web-Interface Zugriff...", flush=True)
-        
-        # FritzBox Cable-Monitor Seite (JSON Endpoint)
-        base_url = f"http://{FRITZBOX_HOST}"
-        
-        session = requests.Session()
-        
-        # Login falls nötig
-        if FRITZBOX_USER and FRITZBOX_PASSWORD:
-            login_url = f"{base_url}/login_sid.lua"
-            # Hole Challenge
-            resp = session.get(login_url, timeout=10)
-            # Parse Challenge aus XML
-            import hashlib
-            root = ET.fromstring(resp.content)
-            challenge = root.find('Challenge').text if root.find('Challenge') is not None else None
-            
-            if challenge:
-                # MD5(challenge + "-" + MD5(password))
-                md5_pass = hashlib.md5(FRITZBOX_PASSWORD.encode('utf-16le')).hexdigest()
-                response_str = f"{challenge}-{md5_pass}"
-                response_hash = hashlib.md5(response_str.encode()).hexdigest()
-                
-                # Login
-                login_data = {
-                    'username': FRITZBOX_USER,
-                    'response': f"{challenge}-{response_hash}"
-                }
-                session.post(login_url, data=login_data, timeout=10)
-        
-        # Hole Cable-Daten (spezielle URL für Cable-Modems)
-        cable_url = f"{base_url}/cgi-bin/webcm"
-        params = {
-            'getpage': '../html/de/menus/menu2.html',
-            'var:lang': 'de',
-            'var:pagename': 'docinfo',
-            'var:menu': 'home'
-        }
-        
-        resp = session.get(cable_url, params=params, timeout=10)
-        
-        if resp.status_code == 200:
-            # Parse HTML für Cable-Infos
-            text = resp.text
-            
-            # Einfaches Parsing (besser wäre BeautifulSoup, aber wir halten es minimal)
-            channels_info = {
-                'downstream': [],
-                'upstream': [],
-                'raw_html': text[:500]  # Erste 500 Zeichen als Debug
-            }
-            
-            print("✓ FritzBox Web-Daten empfangen", flush=True)
-            return channels_info
-        
-        print("⚠️  Web-Interface nicht erreichbar", flush=True)
-        return None
-        
-    except Exception as e:
-        print(f"⚠️  Web-Zugriff Fehler: {e}", flush=True)
-        return None
-
-
 def cleanup_firefox():
     """Räume alte Firefox-Prozesse und Profile auf"""
     try:
@@ -367,54 +287,129 @@ def run_speedtest():
         # Hole FritzBox Cable-Daten
         fritzbox_data = get_fritzbox_cable_info()
         
-        # Erweitere CSV mit FritzBox Cable-Daten
+        # Erweitere CSV mit FritzBox DOCSIS-Daten (ALLE Daten für maximale Dokumentation)
         if fritzbox_data:
             # Lese komplette CSV
             with open(latest_csv, 'r', encoding='utf-8') as file:
                 lines = file.readlines()
             
-            # Erweitere Header
+            # Erweitere Header mit ALLEN relevanten Daten
             header = lines[0].strip()
-            header += ';FB_Cable_Status;FB_Link_Status;FB_DS_Freq;FB_DS_Power;FB_DS_Modulation'
-            header += ';FB_US_Freq;FB_US_Power;FB_US_Modulation'
-            header += ';FB_Total_Codewords;FB_Corrected_Errors;FB_Uncorrected_Errors'
-            header += ';FB_DS_Channels;FB_US_Channels\n'
+            # Fehlerstatistik
+            header += ';FB_Non_Corr_Errors;FB_Corr_Errors'
+            # Kanalzählung
+            header += ';FB_DOCSIS31_DS;FB_DOCSIS30_DS;FB_DOCSIS31_US;FB_DOCSIS30_US'
+            # Signalpegel
+            header += ';FB_Avg_DS_Power_dBmV;FB_Min_DS_Power_dBmV;FB_Max_DS_Power_dBmV;FB_Avg_US_Power_dBmV'
+            # Sync-Geschwindigkeit
+            header += ';FB_Sync_DS_Kbps;FB_Sync_US_Kbps'
+            # Verbindung
+            header += ';FB_Connection_Time'
+            # Top Problem-Kanal
+            header += ';FB_Top_Problem_Channel;FB_Top_Problem_Errors\n'
             
             # Erweitere Daten
             if len(lines) > 1:
                 data_line = lines[1].strip()
-                data_line += f';{fritzbox_data.get("cable_status", "N/A")}'
-                data_line += f';{fritzbox_data.get("link_status", "N/A")}'
-                data_line += f';{fritzbox_data.get("downstream_frequency", "N/A")}'
-                data_line += f';{fritzbox_data.get("downstream_powerLevel", "N/A")}'
-                data_line += f';{fritzbox_data.get("downstream_modulation", "N/A")}'
-                data_line += f';{fritzbox_data.get("upstream_frequency", "N/A")}'
-                data_line += f';{fritzbox_data.get("upstream_powerLevel", "N/A")}'
-                data_line += f';{fritzbox_data.get("upstream_modulation", "N/A")}'
-                data_line += f';{fritzbox_data.get("total_codewords", "N/A")}'
-                data_line += f';{fritzbox_data.get("corrected_codewords", "0")}'
-                data_line += f';{fritzbox_data.get("uncorrected_codewords", "0")}'
                 
-                # Channel-Infos als String (Anzahl der Kanäle)
-                ds_ch_count = len(fritzbox_data.get("downstream_channels", []))
-                us_ch_count = len(fritzbox_data.get("upstream_channels", []))
-                data_line += f';{ds_ch_count};{us_ch_count}\n'
+                # Fehlerstatistik
+                data_line += f';{fritzbox_data.get("total_non_corr_errors", 0)}'
+                data_line += f';{fritzbox_data.get("total_corr_errors", 0)}'
+                
+                # Kanalzählung
+                data_line += f';{fritzbox_data.get("docsis31_ds_channels", 0)}'
+                data_line += f';{fritzbox_data.get("docsis30_ds_channels", 0)}'
+                data_line += f';{fritzbox_data.get("docsis31_us_channels", 0)}'
+                data_line += f';{fritzbox_data.get("docsis30_us_channels", 0)}'
+                
+                # Signalpegel
+                data_line += f';{fritzbox_data.get("avg_ds_power_level", 0):.1f}'
+                data_line += f';{fritzbox_data.get("min_ds_power_level", 0):.1f}'
+                data_line += f';{fritzbox_data.get("max_ds_power_level", 0):.1f}'
+                data_line += f';{fritzbox_data.get("avg_us_power_level", 0):.1f}'
+                
+                # Sync-Geschwindigkeit
+                data_line += f';{fritzbox_data.get("sync_ds_speed_kbps", 0)}'
+                data_line += f';{fritzbox_data.get("sync_us_speed_kbps", 0)}'
+                
+                # Verbindung
+                data_line += f';{fritzbox_data.get("connection_time", "")}'
+                
+                # Top Problem-Kanal
+                problem_channels = fritzbox_data.get('problem_channels', [])
+                if problem_channels:
+                    top_ch = problem_channels[0]
+                    data_line += f';{top_ch["channel_id"]}'
+                    data_line += f';{top_ch["non_corr_errors"]}'
+                else:
+                    data_line += ';0;0'
+                data_line += '\n'
                 
                 # Schreibe erweiterte CSV
                 with open(latest_csv, 'w', encoding='utf-8') as file:
                     file.write(header)
                     file.write(data_line)
                 
-                # Erstelle zusätzliche Detail-CSV mit allen Kanal-Infos
-                detail_csv = latest_csv.replace('.csv', '_channels.csv')
-                with open(detail_csv, 'w', encoding='utf-8') as file:
-                    file.write("Channel_Direction;Channel_ID;Info\n")
-                    for idx, ch in enumerate(fritzbox_data.get("downstream_channels", [])):
-                        file.write(f"Downstream;{idx+1};{ch}\n")
-                    for idx, ch in enumerate(fritzbox_data.get("upstream_channels", [])):
-                        file.write(f"Upstream;{idx+1};{ch}\n")
+                # Erstelle detaillierte DOCSIS-CSV mit allen Kanal-Infos
+                detail_csv = latest_csv.replace('.csv', '_docsis.csv')
+                raw_all = fritzbox_data.get('raw_all_data', {})
+                parsed = raw_all.get('parsed', {}) if raw_all else {}
                 
-                print(f"📋 Channel-Details: {os.path.basename(detail_csv)}", flush=True)
+                with open(detail_csv, 'w', encoding='utf-8') as file:
+                    file.write("Timestamp;Direction;DOCSIS;Channel_ID;Frequency;Modulation;Power_Level;MER_MSE_dB;Non_Corr_Errors;Corr_Errors\n")
+                    
+                    # DOCSIS 3.1 Downstream
+                    for ch in parsed.get('downstream', {}).get('docsis31', []):
+                        file.write(f"{fritzbox_data['timestamp']};Downstream;3.1")
+                        file.write(f";{ch.get('channel_id', '')}")
+                        file.write(f";{ch.get('frequency', '')}")
+                        file.write(f";{ch.get('modulation', '')}")
+                        file.write(f";{ch.get('power_level', '')}")
+                        file.write(f";{ch.get('mer', 0)}")
+                        file.write(f";{ch.get('non_corr_errors', 0)}")
+                        file.write(f";0\n")
+                    
+                    # DOCSIS 3.0 Downstream
+                    for ch in parsed.get('downstream', {}).get('docsis30', []):
+                        file.write(f"{fritzbox_data['timestamp']};Downstream;3.0")
+                        file.write(f";{ch.get('channel_id', '')}")
+                        file.write(f";{ch.get('frequency', '')}")
+                        file.write(f";{ch.get('modulation', '')}")
+                        file.write(f";{ch.get('power_level', '')}")
+                        file.write(f";{ch.get('mse', 0)}")
+                        file.write(f";{ch.get('non_corr_errors', 0)}")
+                        file.write(f";{ch.get('corr_errors', 0)}\n")
+                    
+                    # Upstream
+                    for ch in parsed.get('upstream', {}).get('docsis31', []):
+                        file.write(f"{fritzbox_data['timestamp']};Upstream;3.1")
+                        file.write(f";{ch.get('channel_id', '')}")
+                        file.write(f";{ch.get('frequency', '')}")
+                        file.write(f";{ch.get('modulation', '')}")
+                        file.write(f";{ch.get('power_level', '')}")
+                        file.write(f";0;0;0\n")
+                    
+                    for ch in parsed.get('upstream', {}).get('docsis30', []):
+                        file.write(f"{fritzbox_data['timestamp']};Upstream;3.0")
+                        file.write(f";{ch.get('channel_id', '')}")
+                        file.write(f";{ch.get('frequency', '')}")
+                        file.write(f";{ch.get('modulation', '')}")
+                        file.write(f";{ch.get('power_level', '')}")
+                        file.write(f";0;0;0\n")
+                
+                print(f"📋 DOCSIS-Details: {os.path.basename(detail_csv)}", flush=True)
+                
+                # Speichere ALLE Rohdaten als JSON für spätere Analyse
+                json_file = latest_csv.replace('.csv', '_fritzbox_full.json')
+                with open(json_file, 'w', encoding='utf-8') as f:
+                    # Entferne das raw_all_data um Rekursion zu vermeiden
+                    save_data = {k: v for k, v in fritzbox_data.items() if k != 'raw_all_data'}
+                    save_data['raw_docsis'] = raw_all.get('docsis')
+                    save_data['raw_cable_overview'] = raw_all.get('cable_overview')
+                    save_data['raw_connection'] = raw_all.get('connection')
+                    save_data['raw_traffic'] = raw_all.get('traffic')
+                    json.dump(save_data, f, indent=2, default=str)
+                print(f"📋 JSON-Rohdaten: {os.path.basename(json_file)}", flush=True)
         
         # Zeige Ergebnisse
         print("\n" + "=" * 50)
@@ -425,22 +420,38 @@ def run_speedtest():
         print(f"  ⚡ Ping:     {ping} ms")
         
         if fritzbox_data:
-            print("\n📡 FritzBox Cable-Info:")
-            print(f"  📶 Link: {fritzbox_data.get('link_status', 'N/A')}")
-            print(f"  ⬇️  Downstream: {fritzbox_data.get('downstream_frequency', 'N/A')} MHz ({fritzbox_data.get('downstream_modulation', 'N/A')})")
-            print(f"     Power: {fritzbox_data.get('downstream_powerLevel', 'N/A')} dBmV")
-            print(f"  ⬆️  Upstream: {fritzbox_data.get('upstream_frequency', 'N/A')} MHz ({fritzbox_data.get('upstream_modulation', 'N/A')})")
-            print(f"     Power: {fritzbox_data.get('upstream_powerLevel', 'N/A')} dBmV")
-            print(f"  🔴 Nicht korrigierbare Fehler: {fritzbox_data.get('uncorrected_codewords', '0')}")
-            print(f"  🟡 Korrigierte Fehler: {fritzbox_data.get('corrected_codewords', '0')}")
-            ds_count = len(fritzbox_data.get('downstream_channels', []))
-            us_count = len(fritzbox_data.get('upstream_channels', []))
-            print(f"  📊 Kanäle: {ds_count} Downstream, {us_count} Upstream")
+            print("\n📡 FritzBox DOCSIS-Status:")
+            print(f"  📊 DOCSIS 3.1: {fritzbox_data.get('docsis31_ds_channels', 0)} DS / {fritzbox_data.get('docsis31_us_channels', 0)} US Kanäle")
+            print(f"  📊 DOCSIS 3.0: {fritzbox_data.get('docsis30_ds_channels', 0)} DS / {fritzbox_data.get('docsis30_us_channels', 0)} US Kanäle")
+            print(f"  🔴 Nicht korrigierbare Fehler: {fritzbox_data.get('total_non_corr_errors', 0):,}")
+            print(f"  🟡 Korrigierte Fehler: {fritzbox_data.get('total_corr_errors', 0):,}")
+            
+            # Signalpegel
+            if fritzbox_data.get('avg_ds_power_level'):
+                print(f"  📶 DS Power: {fritzbox_data.get('min_ds_power_level', 0):.1f} - {fritzbox_data.get('max_ds_power_level', 0):.1f} dBmV (Ø {fritzbox_data.get('avg_ds_power_level', 0):.1f})")
+            if fritzbox_data.get('avg_us_power_level'):
+                print(f"  📶 US Power: Ø {fritzbox_data.get('avg_us_power_level', 0):.1f} dBmV")
+            
+            # Sync-Geschwindigkeit
+            if fritzbox_data.get('sync_ds_speed_kbps'):
+                print(f"  🚀 Sync: {fritzbox_data.get('sync_ds_speed_kbps', 0)/1000:.0f} Mbit/s DS / {fritzbox_data.get('sync_us_speed_kbps', 0)/1000:.0f} Mbit/s US")
+            
+            # Verbindungszeit
+            if fritzbox_data.get('connection_time'):
+                print(f"  ⏱️  Verbindung: {fritzbox_data.get('connection_time')}")
+            
+            # Zeige Problem-Kanäle
+            problem_channels = fritzbox_data.get('problem_channels', [])
+            if problem_channels:
+                print(f"\n  🚨 TOP PROBLEM-KANÄLE:")
+                for ch in problem_channels[:5]:  # Top 5
+                    severity = "🔴🔴🔴" if ch['non_corr_errors'] > 1_000_000 else "🔴"
+                    print(f"     {severity} Kanal {ch['channel_id']:2d}: {ch['non_corr_errors']:>15,} Fehler")
         
         print("=" * 50)
         print(f"\n💾 CSV gespeichert: {os.path.basename(latest_csv)}")
         
-        # Screenshot (optional)
+        # Screenshot nur von der Breitbandmessung-Ergebnisseite (optional)
         if SAVE_SCREENSHOTS:
             now = datetime.now()
             screenshot_name = f"Breitbandmessung_{now.strftime('%d_%m_%Y_%H_%M_%S')}.png"
@@ -448,100 +459,8 @@ def run_speedtest():
             browser.save_screenshot(screenshot_path)
             print(f"📸 Screenshot: {screenshot_name}")
         
-        # FritzBox Cable-Seite Screenshot (falls aktiviert)
-        if FRITZBOX_ENABLED and FRITZBOX_SCREENSHOT:
-            print("\n📡 Erstelle FritzBox Cable Screenshots...")
-            try:
-                now = datetime.now()
-                
-                # Login in FritzBox (falls Passwort gesetzt)
-                if FRITZBOX_PASSWORD:
-                    print(f"  🔐 Login in FritzBox...")
-                    browser.get(f"http://{FRITZBOX_HOST}")
-                    time.sleep(2)
-                    
-                    try:
-                        # Custom Web Component - nutze das INNERE Input-Feld!
-                        # <password-input id="uiPass"> enthält <input id="uiPassInput">
-                        password_field = browser.find_element(By.ID, "uiPassInput")
-                        password_field.send_keys(FRITZBOX_PASSWORD)
-                        
-                        # Login-Button klicken
-                        login_button = browser.find_element(By.ID, "submitLoginBtn")
-                        login_button.click()
-                        
-                        # Warte bis Login durch ist (URL ändert sich nach Login)
-                        time.sleep(3)
-                        print(f"  ✓ Login erfolgreich")
-                    except Exception as e:
-                        print(f"  ⚠️  Login fehlgeschlagen: {e}")
-                        print(f"  → Versuche ohne Login (Session evtl. schon aktiv)...")
-                
-                # Screenshot-URLs - ALLE Cable-Seiten!
-                cable_pages = [
-                    ("cable_overview", f"http://{FRITZBOX_HOST}/#/cable", "h2"),  # Hauptüberschrift
-                    ("cable_channels", f"http://{FRITZBOX_HOST}/#/cable/channels", "table"),  # Kanaltabelle
-                    ("cable_spectrum", f"http://{FRITZBOX_HOST}/#/cable/spectrum", "svg"),  # Spektrum-Graph
-                    ("cable_utilization", f"http://{FRITZBOX_HOST}/#/cable/utilization", "svg")  # Auslastungs-Graph
-                ]
-                
-                screenshot_count = 0
-                for page_name, url, wait_element in cable_pages:
-                    try:
-                        print(f"  → {page_name}: {url}")
-                        browser.get(url)
-                        
-                        # Warte bis Seite geladen ist (max 15 Sekunden)
-                        try:
-                            wait = WebDriverWait(browser, 15)
-                            wait.until(EC.presence_of_element_located((By.TAG_NAME, wait_element)))
-                            print(f"    ✓ Seite geladen ({wait_element} gefunden)")
-                        except:
-                            print(f"    ⏳ Timeout - mache trotzdem Screenshot")
-                        
-                        # Extra Pause für Animationen/Rendering
-                        time.sleep(2)
-                        
-                        # FULLPAGE Screenshot - setze Window-Größe auf volle Content-Höhe
-                        try:
-                            # Hole gesamte Seiten-Dimensionen
-                            total_width = browser.execute_script("return document.body.scrollWidth")
-                            total_height = browser.execute_script("return document.body.scrollHeight")
-                            
-                            # Setze Browser-Fenster auf volle Größe (max 20000px für Performance)
-                            browser.set_window_size(1920, min(total_height + 200, 20000))
-                            
-                            # Kurz warten bis Resize fertig
-                            time.sleep(1)
-                            
-                            print(f"    📐 Fullpage: {total_width}x{total_height}px")
-                        except Exception as e:
-                            print(f"    ⚠️  Fullpage-Resize fehlgeschlagen: {e}")
-                        
-                        # Screenshot der vollen Seite
-                        screenshot_name = f"FritzBox_{page_name}_{now.strftime('%d_%m_%Y_%H_%M_%S')}.png"
-                        screenshot_path = os.path.join(EXPORT_PATH, screenshot_name)
-                        browser.save_screenshot(screenshot_path)
-                        print(f"    📸 {screenshot_name}")
-                        screenshot_count += 1
-                        
-                        # Reset Window-Größe für nächste Seite
-                        browser.set_window_size(1920, 1080)
-                        
-                    except Exception as e:
-                        print(f"  ⚠️  {page_name} Fehler: {e}")
-                
-                if screenshot_count > 0:
-                    print(f"\n  📸 {screenshot_count} FritzBox Screenshots erstellt!")
-                    print(f"  📊 Zeigt ALLE DOCSIS-Daten: Kanäle, Spektrum, Auslastung")
-                else:
-                    print(f"\n  ⚠️  Keine Screenshots erstellt - prüfe FritzBox-Zugriff")
-                
-            except Exception as e:
-                print(f"⚠️  FritzBox Screenshot Fehler: {e}")
-                print(f"     Tipp: Setze FritzBox-Passwort in config.ini:")
-                print(f"     [FritzBox]")
-                print(f"     password = dein-passwort")
+        # FritzBox-Screenshots DEAKTIVIERT - Daten werden jetzt direkt via API geholt
+        # und als JSON/CSV gespeichert (viel besser für Analyse!)
         
         print("\n✅ Fertig!\n")
         
