@@ -39,10 +39,11 @@ RUN set -eux; \
 # Kopiere Dateien
 COPY speedtest.py ./
 COPY entrypoint.sh /usr/local/bin/
+COPY merge.sh /usr/local/bin/
 COPY config.ini /usr/src/app/config/config.ini
 
 # Berechtigungen
-RUN chmod +x /usr/src/app/speedtest.py /usr/local/bin/entrypoint.sh && \
+RUN chmod +x /usr/src/app/speedtest.py /usr/local/bin/entrypoint.sh /usr/local/bin/merge.sh && \
     mkdir -p /export && \
     chmod 755 /export
 
