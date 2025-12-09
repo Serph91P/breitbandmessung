@@ -38,6 +38,7 @@ RUN set -eux; \
 
 # Kopiere Dateien
 COPY speedtest.py ./
+COPY fritzbox_cable.py ./
 COPY entrypoint.sh /usr/local/bin/
 COPY merge.sh /usr/local/bin/
 COPY config.ini /usr/src/app/config/config.ini
