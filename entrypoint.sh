@@ -42,6 +42,22 @@ fi
 
 export MOZ_HEADLESS=1
 
+# Datenbank: Initialisieren und ggf. CSV-Import
+DB_FILE="/export/measurements.db"
+if [ ! -f "$DB_FILE" ]; then
+    echo "=========================================="
+    echo "  💾 Initialisiere Datenbank..."
+    echo "=========================================="
+    CSV_COUNT=$(find /export -name "Breitbandmessung_*.csv" ! -name "*_docsis.csv" 2>/dev/null | wc -l)
+    if [ "$CSV_COUNT" -gt 0 ]; then
+        echo "📊 $CSV_COUNT bestehende CSV-Dateien gefunden, importiere..."
+        python3 /usr/src/app/import_csv.py /export "$DB_FILE"
+    else
+        echo "ℹ️  Keine bestehenden CSV-Dateien, DB wird beim ersten Test erstellt"
+    fi
+    echo ""
+fi
+
 # Bei Startup ausführen?
 if [ "$RUN_ON_STARTUP" = "true" ]; then
     echo "=========================================="

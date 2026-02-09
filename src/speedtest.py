@@ -29,6 +29,14 @@ except ImportError:
     FRITZBOX_MODULE_AVAILABLE = False
     print("⚠️  fritzbox_cable.py nicht gefunden - FritzBox-Integration eingeschränkt")
 
+# Datenbank-Modul
+try:
+    from database import init_db, insert_measurement, insert_docsis_channels
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
+    print("⚠️  database.py nicht gefunden - Speichere nur CSV")
+
 # Lade Konfiguration
 config = configparser.ConfigParser()
 config.read("/usr/src/app/config/config.ini")
@@ -452,6 +460,77 @@ def run_speedtest():
         print("=" * 50)
         print(f"\n💾 CSV gespeichert: {os.path.basename(latest_csv)}")
         
+        # In Datenbank speichern
+        if DB_AVAILABLE:
+            try:
+                now = datetime.now()
+                date_str = data.get('Messzeitpunkt', '').replace('"', '')
+                time_str = data.get('Uhrzeit', '').replace('"', '')
+                
+                # ISO-Datetime bauen
+                try:
+                    parts = date_str.split('.')
+                    iso_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                    dt_str = f"{iso_date} {time_str}"
+                except (IndexError, ValueError):
+                    dt_str = f"{date_str} {time_str}"
+                
+                db_data = {
+                    'test_id': data.get('Test-ID', '').replace('"', ''),
+                    'datetime': dt_str,
+                    'date': date_str,
+                    'time': time_str,
+                    'download_mbps': float(download),
+                    'upload_mbps': float(upload),
+                    'ping_ms': float(ping),
+                    'version': data.get('Version', '').replace('"', ''),
+                    'os': data.get('Betriebssystem', '').replace('"', ''),
+                    'browser': data.get('Internet-Browser', '').replace('"', ''),
+                }
+                
+                if fritzbox_data:
+                    db_data.update({
+                        'fb_non_corr_errors': fritzbox_data.get('total_non_corr_errors'),
+                        'fb_corr_errors': fritzbox_data.get('total_corr_errors'),
+                        'fb_docsis31_ds': fritzbox_data.get('docsis31_ds_channels'),
+                        'fb_docsis30_ds': fritzbox_data.get('docsis30_ds_channels'),
+                        'fb_docsis31_us': fritzbox_data.get('docsis31_us_channels'),
+                        'fb_docsis30_us': fritzbox_data.get('docsis30_us_channels'),
+                        'fb_avg_ds_power': fritzbox_data.get('avg_ds_power_level'),
+                        'fb_min_ds_power': fritzbox_data.get('min_ds_power_level'),
+                        'fb_max_ds_power': fritzbox_data.get('max_ds_power_level'),
+                        'fb_avg_us_power': fritzbox_data.get('avg_us_power_level'),
+                        'fb_sync_ds_kbps': fritzbox_data.get('sync_ds_speed_kbps'),
+                        'fb_sync_us_kbps': fritzbox_data.get('sync_us_speed_kbps'),
+                        'fb_connection_time': fritzbox_data.get('connection_time', ''),
+                    })
+                    problem_channels = fritzbox_data.get('problem_channels', [])
+                    if problem_channels:
+                        db_data['fb_top_problem_channel'] = problem_channels[0]['channel_id']
+                        db_data['fb_top_problem_errors'] = problem_channels[0]['non_corr_errors']
+                
+                measurement_id = insert_measurement(db_data)
+                
+                # DOCSIS-Kanaldaten in DB
+                if measurement_id and fritzbox_data:
+                    channels = []
+                    raw_all = fritzbox_data.get('raw_all_data', {})
+                    parsed = raw_all.get('parsed', {}) if raw_all else {}
+                    
+                    for ch in parsed.get('downstream', {}).get('docsis31', []):
+                        channels.append({**ch, 'direction': 'Downstream', 'docsis_version': '3.1', 'mer_mse_db': ch.get('mer', 0), 'corr_errors': 0})
+                    for ch in parsed.get('downstream', {}).get('docsis30', []):
+                        channels.append({**ch, 'direction': 'Downstream', 'docsis_version': '3.0', 'mer_mse_db': ch.get('mse', 0)})
+                    for ch in parsed.get('upstream', {}).get('docsis31', []):
+                        channels.append({**ch, 'direction': 'Upstream', 'docsis_version': '3.1', 'mer_mse_db': 0, 'non_corr_errors': 0, 'corr_errors': 0})
+                    for ch in parsed.get('upstream', {}).get('docsis30', []):
+                        channels.append({**ch, 'direction': 'Upstream', 'docsis_version': '3.0', 'mer_mse_db': 0, 'non_corr_errors': 0, 'corr_errors': 0})
+                    
+                    insert_docsis_channels(measurement_id, channels, fritzbox_data['timestamp'])
+                
+                print(f"💾 DB gespeichert (ID: {measurement_id})", flush=True)
+            except Exception as e:
+                print(f"⚠️ DB-Fehler: {e}", flush=True)
         # Screenshot nur von der Breitbandmessung-Ergebnisseite (optional)
         if SAVE_SCREENSHOTS:
             now = datetime.now()
@@ -481,4 +560,11 @@ def run_speedtest():
 
 if __name__ == "__main__":
     ensure_export_directory()
+    if DB_AVAILABLE:
+        try:
+            init_db()
+            print("✅ Datenbank initialisiert", flush=True)
+        except Exception as e:
+            print(f"⚠️ DB-Initialisierung fehlgeschlagen: {e}", flush=True)
+            DB_AVAILABLE = False
     run_speedtest()

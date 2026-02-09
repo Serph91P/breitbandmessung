@@ -40,8 +40,8 @@ services:
       - "${DASHBOARD_PORT:-8501}:8501"
     
     volumes:
-      # Messdaten (read-only) - gleiches Volume
-      - messprotokolle:/data:ro
+      # Messdaten - gleiches Volume (write für SQLite WAL)
+      - messprotokolle:/data
     
     environment:
       - STREAMLIT_SERVER_HEADLESS=true
