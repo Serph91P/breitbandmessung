@@ -105,10 +105,20 @@ Das Web-Dashboard bietet:
 
 | Variable | Standard | Beschreibung |
 |----------|----------|--------------|
-| `CONFIG_PATH` | `./config.ini` | Pfad zur Konfigurationsdatei |
 | `DASHBOARD_PORT` | `8501` | Port für Web-Dashboard |
+| `FRITZBOX_ENABLED` | - | FritzBox aktivieren (`true`/`false`) |
+| `FRITZBOX_HOST` | `192.168.178.1` | FritzBox IP-Adresse |
+| `FRITZBOX_USERNAME` | - | FritzBox Benutzer |
+| `FRITZBOX_PASSWORD` | - | FritzBox Passwort |
 
-Messdaten werden in einem benannten Docker Volume (`breitbandmessung-messprotokolle`) gespeichert und überleben Container-Neustarts und Redeployments.
+Environment-Variablen überschreiben die Werte aus `config.ini` — ideal für Komodo/Secrets.
+
+### Daten-Persistenz
+
+| Volume | Beschreibung |
+|--------|--------------|
+| `breitbandmessung-messprotokolle` | CSV-Dateien, Screenshots, DOCSIS-Daten |
+| `breitbandmessung-config` | config.ini (wird beim ersten Start mit Defaults befüllt) |
 
 ## 📡 FritzBox Integration
 

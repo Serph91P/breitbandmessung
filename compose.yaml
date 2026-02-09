@@ -11,8 +11,15 @@ services:
     volumes:
       # Messprotokolle - persistentes Volume
       - messprotokolle:/export
-      # Config - vom Host gemounted
-      - ${CONFIG_PATH:-./config.ini}:/usr/src/app/config/config.ini:ro
+      # Config - persistentes Volume (Default wird beim ersten Start kopiert)
+      - config:/usr/src/app/config
+    
+    environment:
+      # FritzBox-Zugangsdaten (überschreiben config.ini)
+      - FRITZBOX_ENABLED=${FRITZBOX_ENABLED:-}
+      - FRITZBOX_HOST=${FRITZBOX_HOST:-}
+      - FRITZBOX_USERNAME=${FRITZBOX_USERNAME:-}
+      - FRITZBOX_PASSWORD=${FRITZBOX_PASSWORD:-}
     
     logging:
       driver: "json-file"
@@ -55,3 +62,5 @@ services:
 volumes:
   messprotokolle:
     name: breitbandmessung-messprotokolle
+  config:
+    name: breitbandmessung-config

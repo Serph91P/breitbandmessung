@@ -6,8 +6,12 @@ echo "  🚀 Breitbandmessung"
 echo "=========================================="
 echo ""
 
-# Lese Config
+# Config: Falls keine config.ini vorhanden, nutze Default
 CONFIG_FILE="/usr/src/app/config/config.ini"
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo "ℹ️  Keine config.ini gefunden, nutze Defaults"
+    cp /usr/src/app/config/config.ini.default "$CONFIG_FILE"
+fi
 
 # Einfache INI-Parsing-Funktion
 get_config() {

@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bullseye
+FROM python:3.13-slim-bullseye
 
 LABEL maintainer="Breitbandmessung" \
       description="Einfacher Speedtest mit CSV-Export" \
@@ -40,7 +40,7 @@ RUN set -eux; \
 COPY src/speedtest.py ./
 COPY src/fritzbox_cable.py ./
 COPY entrypoint.sh /usr/local/bin/
-COPY config.ini /usr/src/app/config/config.ini
+COPY config.ini /usr/src/app/config/config.ini.default
 
 # Berechtigungen
 RUN chmod +x /usr/src/app/speedtest.py /usr/local/bin/entrypoint.sh && \

@@ -33,16 +33,16 @@ except ImportError:
 config = configparser.ConfigParser()
 config.read("/usr/src/app/config/config.ini")
 
-# Einstellungen aus Config
-EXPORT_PATH = config.get("Settings", "export_path", fallback="/export")
-SLEEPTIME = config.getint("Settings", "wait_time", fallback=10)
+# Einstellungen aus Config (Environment-Variablen haben Vorrang)
+EXPORT_PATH = os.environ.get("EXPORT_PATH") or config.get("Settings", "export_path", fallback="/export")
+SLEEPTIME = int(os.environ.get("WAIT_TIME", 0)) or config.getint("Settings", "wait_time", fallback=10)
 SAVE_SCREENSHOTS = config.getboolean("Settings", "save_screenshots", fallback=True)
 
-# FritzBox Settings (optional)
-FRITZBOX_ENABLED = config.getboolean("FritzBox", "enabled", fallback=False)
-FRITZBOX_HOST = config.get("FritzBox", "host", fallback="192.168.178.1")
-FRITZBOX_USER = config.get("FritzBox", "username", fallback="")
-FRITZBOX_PASSWORD = config.get("FritzBox", "password", fallback="")
+# FritzBox Settings (Environment-Variablen überschreiben config.ini)
+FRITZBOX_ENABLED = os.environ.get("FRITZBOX_ENABLED", "").lower() in ("true", "1", "yes") if os.environ.get("FRITZBOX_ENABLED") else config.getboolean("FritzBox", "enabled", fallback=False)
+FRITZBOX_HOST = os.environ.get("FRITZBOX_HOST") or config.get("FritzBox", "host", fallback="192.168.178.1")
+FRITZBOX_USER = os.environ.get("FRITZBOX_USERNAME") or config.get("FritzBox", "username", fallback="")
+FRITZBOX_PASSWORD = os.environ.get("FRITZBOX_PASSWORD") or config.get("FritzBox", "password", fallback="")
 FRITZBOX_SCREENSHOT = config.getboolean("FritzBox", "screenshot_cable_page", fallback=True)
 
 # Konstanten
