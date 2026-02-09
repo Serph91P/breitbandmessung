@@ -37,14 +37,13 @@ RUN set -eux; \
     rm /tmp/geckodriver.tar.gz
 
 # Kopiere Dateien
-COPY speedtest.py ./
-COPY fritzbox_cable.py ./
+COPY src/speedtest.py ./
+COPY src/fritzbox_cable.py ./
 COPY entrypoint.sh /usr/local/bin/
-COPY merge.sh /usr/local/bin/
 COPY config.ini /usr/src/app/config/config.ini
 
 # Berechtigungen
-RUN chmod +x /usr/src/app/speedtest.py /usr/local/bin/entrypoint.sh /usr/local/bin/merge.sh && \
+RUN chmod +x /usr/src/app/speedtest.py /usr/local/bin/entrypoint.sh && \
     mkdir -p /export && \
     chmod 755 /export
 

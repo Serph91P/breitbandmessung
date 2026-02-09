@@ -15,18 +15,17 @@ Automatisierte Speedtests mit CSV-Export + FritzBox DOCSIS-Diagnose + **Web-Dash
 
 ```
 breitbandmessung/
+├── src/                    # Python-Anwendung
+│   ├── speedtest.py        # Speedtest-Logik
+│   └── fritzbox_cable.py   # FritzBox Modul
 ├── dashboard/              # Streamlit Web-Dashboard
 │   ├── app.py              # Dashboard-Anwendung
 │   ├── Dockerfile          # Dashboard Container
 │   └── requirements.txt    # Python-Abhängigkeiten
-├── scripts/                # Hilfs-Skripte
-│   └── update_data.py      # Datenaufbereitung
-├── messprotokolle/         # Gespeicherte Messdaten (Volume)
 ├── config.ini              # Hauptkonfiguration
 ├── docker-compose.yml      # Multi-Container Setup
-├── speedtest.py            # Speedtest-Logik
-├── fritzbox_cable.py       # FritzBox Modul
-└── Dockerfile              # Speedtest Container
+├── Dockerfile              # Speedtest Container
+└── entrypoint.sh           # Container Startpunkt
 ```
 
 ## 🚀 Schnellstart
