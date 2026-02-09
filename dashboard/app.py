@@ -2,7 +2,7 @@
 """
 Breitbandmessung Dashboard - Streamlit Web-Interface
 Zeigt Speedtest-Ergebnisse und FritzBox-Analysen interaktiv an.
-Liest Daten aus SQLite-Datenbank (mit CSV-Fallback).
+Liest Daten aus SQLite-Datenbank.
 """
 
 import streamlit as st
@@ -13,8 +13,6 @@ from plotly.subplots import make_subplots
 from pathlib import Path
 from datetime import datetime, timedelta
 import sqlite3
-import json
-import glob
 
 # Seiten-Konfiguration
 st.set_page_config(
@@ -37,154 +35,87 @@ def get_db_connection():
     return conn
 
 
-def clean_numeric(series):
-    """Konvertiert String mit deutschem Dezimalformat zu Float"""
-    if hasattr(series, 'str'):
-        return pd.to_numeric(
-            series.str.replace('"', '').str.replace(',', '.'), 
-            errors='coerce'
-        )
-    return pd.to_numeric(series, errors='coerce')
-
-
 @st.cache_data(ttl=60)
 def load_measurements():
-    """Lädt alle Messdaten aus SQLite (mit CSV-Fallback)"""
+    """Lädt alle Messdaten aus SQLite"""
     
-    # Primär: aus SQLite lesen
-    if DB_PATH.exists():
-        try:
-            conn = get_db_connection()
-            df = pd.read_sql_query("""
-                SELECT 
-                    test_id AS "Test-ID",
-                    date AS "Messzeitpunkt",
-                    time AS "Uhrzeit",
-                    download_mbps AS "Download (Mbit/s)",
-                    upload_mbps AS "Upload (Mbit/s)",
-                    ping_ms AS "Laufzeit (ms)",
-                    version AS "Version",
-                    os AS "Betriebssystem",
-                    browser AS "Internet-Browser",
-                    datetime,
-                    fb_non_corr_errors AS "FB_Non_Corr_Errors",
-                    fb_corr_errors AS "FB_Corr_Errors",
-                    fb_docsis31_ds AS "FB_DOCSIS31_DS",
-                    fb_docsis30_ds AS "FB_DOCSIS30_DS",
-                    fb_docsis31_us AS "FB_DOCSIS31_US",
-                    fb_docsis30_us AS "FB_DOCSIS30_US",
-                    fb_avg_ds_power AS "FB_Avg_DS_Power_dBmV",
-                    fb_min_ds_power AS "FB_Min_DS_Power_dBmV",
-                    fb_max_ds_power AS "FB_Max_DS_Power_dBmV",
-                    fb_avg_us_power AS "FB_Avg_US_Power_dBmV",
-                    fb_sync_ds_kbps AS "FB_Sync_DS_Kbps",
-                    fb_sync_us_kbps AS "FB_Sync_US_Kbps",
-                    fb_connection_time AS "FB_Connection_Time"
-                FROM measurements 
-                ORDER BY datetime ASC
-            """, conn)
-            conn.close()
-            
-            if not df.empty:
-                df['Datetime'] = pd.to_datetime(df['datetime'], errors='coerce')
-                df = df.drop(columns=['datetime'])
-                df['Stunde'] = df['Datetime'].dt.hour
-                df['Wochentag'] = df['Datetime'].dt.day_name()
-                df['Datum'] = df['Datetime'].dt.date
-                return df
-        except Exception as e:
-            st.toast(f"⚠️ DB-Lesefehler: {e}", icon="⚠️")
+    if not DB_PATH.exists():
+        return pd.DataFrame()
     
-    # Fallback: CSV-Dateien laden
-    return _load_measurements_csv()
-
-
-def _load_measurements_csv():
-    """Fallback: Lädt Messdaten aus CSV-Dateien"""
-    messergebnisse_file = MESSPROTOKOLLE_DIR / "messergebnisse.csv"
-    
-    if messergebnisse_file.exists():
-        df = pd.read_csv(messergebnisse_file, sep=';', encoding='utf-8')
-    else:
-        alle_dateien = sorted(MESSPROTOKOLLE_DIR.glob("Breitbandmessung_*.csv"))
-        alle_dateien = [f for f in alle_dateien if not f.name.endswith('_docsis.csv')]
+    try:
+        conn = get_db_connection()
+        df = pd.read_sql_query("""
+            SELECT 
+                test_id AS "Test-ID",
+                date AS "Messzeitpunkt",
+                time AS "Uhrzeit",
+                download_mbps AS "Download (Mbit/s)",
+                upload_mbps AS "Upload (Mbit/s)",
+                ping_ms AS "Laufzeit (ms)",
+                version AS "Version",
+                os AS "Betriebssystem",
+                browser AS "Internet-Browser",
+                datetime,
+                fb_non_corr_errors AS "FB_Non_Corr_Errors",
+                fb_corr_errors AS "FB_Corr_Errors",
+                fb_docsis31_ds AS "FB_DOCSIS31_DS",
+                fb_docsis30_ds AS "FB_DOCSIS30_DS",
+                fb_docsis31_us AS "FB_DOCSIS31_US",
+                fb_docsis30_us AS "FB_DOCSIS30_US",
+                fb_avg_ds_power AS "FB_Avg_DS_Power_dBmV",
+                fb_min_ds_power AS "FB_Min_DS_Power_dBmV",
+                fb_max_ds_power AS "FB_Max_DS_Power_dBmV",
+                fb_avg_us_power AS "FB_Avg_US_Power_dBmV",
+                fb_sync_ds_kbps AS "FB_Sync_DS_Kbps",
+                fb_sync_us_kbps AS "FB_Sync_US_Kbps",
+                fb_connection_time AS "FB_Connection_Time"
+            FROM measurements 
+            ORDER BY datetime ASC
+        """, conn)
+        conn.close()
         
-        if not alle_dateien:
-            return pd.DataFrame()
+        if df.empty:
+            return df
         
-        dataframes = []
-        for datei in alle_dateien:
-            try:
-                result = pd.read_csv(datei, sep=';', encoding='utf-8')
-                if not result.empty:
-                    dataframes.append(result)
-            except Exception:
-                pass
-        
-        if not dataframes:
-            return pd.DataFrame()
-        
-        df = pd.concat(dataframes, ignore_index=True)
-        df = df.drop_duplicates(subset=['Test-ID'], keep='first')
-    
-    if df.empty:
+        df['Datetime'] = pd.to_datetime(df['datetime'], errors='coerce')
+        df = df.drop(columns=['datetime'])
+        df['Stunde'] = df['Datetime'].dt.hour
+        df['Wochentag'] = df['Datetime'].dt.day_name()
+        df['Datum'] = df['Datetime'].dt.date
         return df
-    
-    # Daten bereinigen
-    df['Download (Mbit/s)'] = clean_numeric(df['Download (Mbit/s)'])
-    df['Upload (Mbit/s)'] = clean_numeric(df['Upload (Mbit/s)'])
-    df['Laufzeit (ms)'] = clean_numeric(df['Laufzeit (ms)'])
-    
-    # Datetime erstellen
-    df['Datetime'] = pd.to_datetime(
-        df['Messzeitpunkt'].str.replace('"', '') + ' ' + df['Uhrzeit'].str.replace('"', ''), 
-        format='%d.%m.%Y %H:%M:%S',
-        errors='coerce'
-    )
-    df['Stunde'] = df['Datetime'].dt.hour
-    df['Wochentag'] = df['Datetime'].dt.day_name()
-    df['Datum'] = df['Datetime'].dt.date
-    
-    for col in df.columns:
-        if col.startswith('FB_') and col not in ['FB_Connection_Time']:
-            df[col] = clean_numeric(df[col])
-    
-    return df.sort_values('Datetime')
+    except Exception as e:
+        st.error(f"❌ DB-Lesefehler: {e}")
+        return pd.DataFrame()
 
 
 @st.cache_data(ttl=60)
 def load_docsis_history():
-    """Lädt DOCSIS-Kanal-Historie aus SQLite (mit CSV-Fallback)"""
+    """Lädt DOCSIS-Kanal-Historie aus SQLite"""
     
-    # Primär: aus SQLite
-    if DB_PATH.exists():
-        try:
-            conn = get_db_connection()
-            df = pd.read_sql_query("""
-                SELECT 
-                    dc.timestamp,
-                    dc.direction,
-                    dc.docsis_version,
-                    dc.channel_id,
-                    dc.frequency,
-                    dc.modulation,
-                    dc.power_level,
-                    dc.mer_mse_db,
-                    dc.non_corr_errors,
-                    dc.corr_errors
-                FROM docsis_channels dc
-                ORDER BY dc.timestamp ASC, dc.channel_id ASC
-            """, conn)
-            conn.close()
-            if not df.empty:
-                return df
-        except Exception:
-            pass
+    if not DB_PATH.exists():
+        return pd.DataFrame()
     
-    # Fallback: CSV-Dateien
-    docsis_file = MESSPROTOKOLLE_DIR / "docsis_historie.csv"
-    if docsis_file.exists():
-        return pd.read_csv(docsis_file, sep=';', encoding='utf-8')
+    try:
+        conn = get_db_connection()
+        df = pd.read_sql_query("""
+            SELECT 
+                dc.timestamp,
+                dc.direction,
+                dc.docsis_version,
+                dc.channel_id,
+                dc.frequency,
+                dc.modulation,
+                dc.power_level,
+                dc.mer_mse_db,
+                dc.non_corr_errors,
+                dc.corr_errors
+            FROM docsis_channels dc
+            ORDER BY dc.timestamp ASC, dc.channel_id ASC
+        """, conn)
+        conn.close()
+        return df
+    except Exception:
+        return pd.DataFrame()
     
     # Alternativ: Sammle alle _docsis.csv Dateien
     docsis_files = sorted(MESSPROTOKOLLE_DIR.glob("*_docsis.csv"))
@@ -740,15 +671,11 @@ def main():
         ### Mögliche Ursachen:
         1. Kein Datenverzeichnis gemountet
         2. Noch keine Messungen durchgeführt
-        3. Datenbank noch nicht erstellt (CSV-Import noch nicht gelaufen)
+        3. Datenbank noch nicht erstellt
         
-        Stelle sicher, dass das `/data` Verzeichnis die Datenbank oder CSV-Dateien enthält.
+        Die Datenbank wird automatisch beim ersten Speedtest erstellt.
         """)
         return
-    
-    # Datenquelle anzeigen
-    data_source = "SQLite" if DB_PATH.exists() else "CSV-Dateien"
-    st.sidebar.caption(f"📦 Datenquelle: {data_source}")
     
     # Sidebar Filter
     df_filtered = render_sidebar(df)

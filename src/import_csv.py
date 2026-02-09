@@ -103,7 +103,7 @@ def import_csv(csv_path, db_path=None):
         return False
 
 
-def import_all(data_dir, db_path=None):
+def import_all(data_dir, db_path=None, delete_after=False):
     """Importiert alle CSVs aus einem Verzeichnis"""
     if db_path:
         os.environ["DB_PATH"] = db_path
@@ -111,6 +111,8 @@ def import_all(data_dir, db_path=None):
     actual_db = db_path or get_db_path()
     print(f"📂 Datenverzeichnis: {data_dir}")
     print(f"💾 Datenbank: {actual_db}")
+    if delete_after:
+        print(f"🗑️  Lösche Quelldateien nach Import")
     
     # DB initialisieren
     init_db(actual_db)
@@ -126,6 +128,7 @@ def import_all(data_dir, db_path=None):
     imported = 0
     skipped = 0
     errors = 0
+    deleted = 0
     
     for i, csv_path in enumerate(measurement_csvs):
         result = import_csv(csv_path, actual_db)
@@ -135,6 +138,19 @@ def import_all(data_dir, db_path=None):
             skipped += 1
         else:
             errors += 1
+            continue  # Nicht löschen bei Fehler
+        
+        # Quelldateien löschen (CSV + _docsis.csv + _fritzbox_full.json)
+        if delete_after:
+            base = csv_path[:-4]  # ohne .csv
+            for suffix in ['.csv', '_docsis.csv', '_fritzbox_full.json']:
+                try:
+                    f = base + suffix
+                    if os.path.exists(f):
+                        os.remove(f)
+                except OSError:
+                    pass
+            deleted += 1
         
         # Fortschritt alle 100 Dateien
         if (i + 1) % 100 == 0:
@@ -145,10 +161,27 @@ def import_all(data_dir, db_path=None):
     print(f"  ⏭️  Übersprungen (Duplikate): {skipped}")
     if errors:
         print(f"  ❌ Fehler: {errors}")
+    if delete_after:
+        print(f"  🗑️  Gelöscht: {deleted} Dateigruppen")
+    
+    # Auch einzelne _docsis.csv und _fritzbox_full.json ohne Hauptdatei aufräumen
+    if delete_after:
+        orphan_deleted = 0
+        for pattern in ["*_docsis.csv", "*_fritzbox_full.json", "messergebnisse.csv", "docsis_historie.csv"]:
+            for f in glob.glob(os.path.join(data_dir, pattern)):
+                try:
+                    os.remove(f)
+                    orphan_deleted += 1
+                except OSError:
+                    pass
+        if orphan_deleted:
+            print(f"  🗑️  Restdateien aufgeräumt: {orphan_deleted}")
 
 
 if __name__ == "__main__":
-    # Standard: /export (im Container) oder Argument
-    data_dir = sys.argv[1] if len(sys.argv) > 1 else "/export"
-    db_path = sys.argv[2] if len(sys.argv) > 2 else None
-    import_all(data_dir, db_path)
+    # Usage: python import_csv.py [data_dir] [db_path] [--delete]
+    args = [a for a in sys.argv[1:] if not a.startswith('--')]
+    delete = '--delete' in sys.argv
+    data_dir = args[0] if len(args) > 0 else "/export"
+    db_path = args[1] if len(args) > 1 else None
+    import_all(data_dir, db_path, delete_after=delete)

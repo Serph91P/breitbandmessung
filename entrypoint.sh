@@ -50,8 +50,8 @@ if [ ! -f "$DB_FILE" ]; then
     echo "=========================================="
     CSV_COUNT=$(find /export -name "Breitbandmessung_*.csv" ! -name "*_docsis.csv" 2>/dev/null | wc -l)
     if [ "$CSV_COUNT" -gt 0 ]; then
-        echo "📊 $CSV_COUNT bestehende CSV-Dateien gefunden, importiere..."
-        python3 /usr/src/app/import_csv.py /export "$DB_FILE"
+        echo "📊 $CSV_COUNT bestehende CSV-Dateien gefunden, importiere und lösche..."
+        python3 /usr/src/app/import_csv.py /export "$DB_FILE" --delete
     else
         echo "ℹ️  Keine bestehenden CSV-Dateien, DB wird beim ersten Test erstellt"
     fi

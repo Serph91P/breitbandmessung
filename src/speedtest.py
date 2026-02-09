@@ -19,7 +19,6 @@ import os
 import csv
 import glob
 import shutil
-import json
 
 # FritzBox Cable Modul (neues verbessertes Modul)
 try:
@@ -220,7 +219,7 @@ def ensure_export_directory():
         print(f"✓ Export-Verzeichnis: {EXPORT_PATH}", flush=True)
 
 def run_speedtest():
-    """Führt einen Speedtest durch und speichert die Ergebnisse als CSV"""
+    """Führt einen Speedtest durch und speichert die Ergebnisse in der DB"""
     
     print("=" * 50)
     print("🚀 Starte Breitbandmessung...")
@@ -296,130 +295,6 @@ def run_speedtest():
         # Hole FritzBox Cable-Daten
         fritzbox_data = get_fritzbox_cable_info()
         
-        # Erweitere CSV mit FritzBox DOCSIS-Daten (ALLE Daten für maximale Dokumentation)
-        if fritzbox_data:
-            # Lese komplette CSV
-            with open(latest_csv, 'r', encoding='utf-8') as file:
-                lines = file.readlines()
-            
-            # Erweitere Header mit ALLEN relevanten Daten
-            header = lines[0].strip()
-            # Fehlerstatistik
-            header += ';FB_Non_Corr_Errors;FB_Corr_Errors'
-            # Kanalzählung
-            header += ';FB_DOCSIS31_DS;FB_DOCSIS30_DS;FB_DOCSIS31_US;FB_DOCSIS30_US'
-            # Signalpegel
-            header += ';FB_Avg_DS_Power_dBmV;FB_Min_DS_Power_dBmV;FB_Max_DS_Power_dBmV;FB_Avg_US_Power_dBmV'
-            # Sync-Geschwindigkeit
-            header += ';FB_Sync_DS_Kbps;FB_Sync_US_Kbps'
-            # Verbindung
-            header += ';FB_Connection_Time'
-            # Top Problem-Kanal
-            header += ';FB_Top_Problem_Channel;FB_Top_Problem_Errors\n'
-            
-            # Erweitere Daten
-            if len(lines) > 1:
-                data_line = lines[1].strip()
-                
-                # Fehlerstatistik
-                data_line += f';{fritzbox_data.get("total_non_corr_errors", 0)}'
-                data_line += f';{fritzbox_data.get("total_corr_errors", 0)}'
-                
-                # Kanalzählung
-                data_line += f';{fritzbox_data.get("docsis31_ds_channels", 0)}'
-                data_line += f';{fritzbox_data.get("docsis30_ds_channels", 0)}'
-                data_line += f';{fritzbox_data.get("docsis31_us_channels", 0)}'
-                data_line += f';{fritzbox_data.get("docsis30_us_channels", 0)}'
-                
-                # Signalpegel
-                data_line += f';{fritzbox_data.get("avg_ds_power_level", 0):.1f}'
-                data_line += f';{fritzbox_data.get("min_ds_power_level", 0):.1f}'
-                data_line += f';{fritzbox_data.get("max_ds_power_level", 0):.1f}'
-                data_line += f';{fritzbox_data.get("avg_us_power_level", 0):.1f}'
-                
-                # Sync-Geschwindigkeit
-                data_line += f';{fritzbox_data.get("sync_ds_speed_kbps", 0)}'
-                data_line += f';{fritzbox_data.get("sync_us_speed_kbps", 0)}'
-                
-                # Verbindung
-                data_line += f';{fritzbox_data.get("connection_time", "")}'
-                
-                # Top Problem-Kanal
-                problem_channels = fritzbox_data.get('problem_channels', [])
-                if problem_channels:
-                    top_ch = problem_channels[0]
-                    data_line += f';{top_ch["channel_id"]}'
-                    data_line += f';{top_ch["non_corr_errors"]}'
-                else:
-                    data_line += ';0;0'
-                data_line += '\n'
-                
-                # Schreibe erweiterte CSV
-                with open(latest_csv, 'w', encoding='utf-8') as file:
-                    file.write(header)
-                    file.write(data_line)
-                
-                # Erstelle detaillierte DOCSIS-CSV mit allen Kanal-Infos
-                detail_csv = latest_csv.replace('.csv', '_docsis.csv')
-                raw_all = fritzbox_data.get('raw_all_data', {})
-                parsed = raw_all.get('parsed', {}) if raw_all else {}
-                
-                with open(detail_csv, 'w', encoding='utf-8') as file:
-                    file.write("Timestamp;Direction;DOCSIS;Channel_ID;Frequency;Modulation;Power_Level;MER_MSE_dB;Non_Corr_Errors;Corr_Errors\n")
-                    
-                    # DOCSIS 3.1 Downstream
-                    for ch in parsed.get('downstream', {}).get('docsis31', []):
-                        file.write(f"{fritzbox_data['timestamp']};Downstream;3.1")
-                        file.write(f";{ch.get('channel_id', '')}")
-                        file.write(f";{ch.get('frequency', '')}")
-                        file.write(f";{ch.get('modulation', '')}")
-                        file.write(f";{ch.get('power_level', '')}")
-                        file.write(f";{ch.get('mer', 0)}")
-                        file.write(f";{ch.get('non_corr_errors', 0)}")
-                        file.write(f";0\n")
-                    
-                    # DOCSIS 3.0 Downstream
-                    for ch in parsed.get('downstream', {}).get('docsis30', []):
-                        file.write(f"{fritzbox_data['timestamp']};Downstream;3.0")
-                        file.write(f";{ch.get('channel_id', '')}")
-                        file.write(f";{ch.get('frequency', '')}")
-                        file.write(f";{ch.get('modulation', '')}")
-                        file.write(f";{ch.get('power_level', '')}")
-                        file.write(f";{ch.get('mse', 0)}")
-                        file.write(f";{ch.get('non_corr_errors', 0)}")
-                        file.write(f";{ch.get('corr_errors', 0)}\n")
-                    
-                    # Upstream
-                    for ch in parsed.get('upstream', {}).get('docsis31', []):
-                        file.write(f"{fritzbox_data['timestamp']};Upstream;3.1")
-                        file.write(f";{ch.get('channel_id', '')}")
-                        file.write(f";{ch.get('frequency', '')}")
-                        file.write(f";{ch.get('modulation', '')}")
-                        file.write(f";{ch.get('power_level', '')}")
-                        file.write(f";0;0;0\n")
-                    
-                    for ch in parsed.get('upstream', {}).get('docsis30', []):
-                        file.write(f"{fritzbox_data['timestamp']};Upstream;3.0")
-                        file.write(f";{ch.get('channel_id', '')}")
-                        file.write(f";{ch.get('frequency', '')}")
-                        file.write(f";{ch.get('modulation', '')}")
-                        file.write(f";{ch.get('power_level', '')}")
-                        file.write(f";0;0;0\n")
-                
-                print(f"📋 DOCSIS-Details: {os.path.basename(detail_csv)}", flush=True)
-                
-                # Speichere ALLE Rohdaten als JSON für spätere Analyse
-                json_file = latest_csv.replace('.csv', '_fritzbox_full.json')
-                with open(json_file, 'w', encoding='utf-8') as f:
-                    # Entferne das raw_all_data um Rekursion zu vermeiden
-                    save_data = {k: v for k, v in fritzbox_data.items() if k != 'raw_all_data'}
-                    save_data['raw_docsis'] = raw_all.get('docsis')
-                    save_data['raw_cable_overview'] = raw_all.get('cable_overview')
-                    save_data['raw_connection'] = raw_all.get('connection')
-                    save_data['raw_traffic'] = raw_all.get('traffic')
-                    json.dump(save_data, f, indent=2, default=str)
-                print(f"📋 JSON-Rohdaten: {os.path.basename(json_file)}", flush=True)
-        
         # Zeige Ergebnisse
         print("\n" + "=" * 50)
         print("📊 MESSERGEBNISSE:")
@@ -458,7 +333,6 @@ def run_speedtest():
                     print(f"     {severity} Kanal {ch['channel_id']:2d}: {ch['non_corr_errors']:>15,} Fehler")
         
         print("=" * 50)
-        print(f"\n💾 CSV gespeichert: {os.path.basename(latest_csv)}")
         
         # In Datenbank speichern
         if DB_AVAILABLE:
@@ -528,9 +402,18 @@ def run_speedtest():
                     
                     insert_docsis_channels(measurement_id, channels, fritzbox_data['timestamp'])
                 
-                print(f"💾 DB gespeichert (ID: {measurement_id})", flush=True)
+                # CSV löschen - Daten sind in der DB
+                try:
+                    os.remove(latest_csv)
+                except OSError:
+                    pass
+                
+                print(f"\n💾 In Datenbank gespeichert (ID: {measurement_id})", flush=True)
             except Exception as e:
-                print(f"⚠️ DB-Fehler: {e}", flush=True)
+                print(f"⚠️ DB-Fehler: {e} — CSV behalten als Fallback", flush=True)
+        else:
+            print(f"\n💾 CSV gespeichert: {os.path.basename(latest_csv)}", flush=True)
+        
         # Screenshot nur von der Breitbandmessung-Ergebnisseite (optional)
         if SAVE_SCREENSHOTS:
             now = datetime.now()
@@ -538,9 +421,6 @@ def run_speedtest():
             screenshot_path = os.path.join(EXPORT_PATH, screenshot_name)
             browser.save_screenshot(screenshot_path)
             print(f"📸 Screenshot: {screenshot_name}")
-        
-        # FritzBox-Screenshots DEAKTIVIERT - Daten werden jetzt direkt via API geholt
-        # und als JSON/CSV gespeichert (viel besser für Analyse!)
         
         print("\n✅ Fertig!\n")
         
