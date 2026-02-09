@@ -260,7 +260,7 @@ def render_speedtest_chart(df):
             height=500
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     
     with tab2:
         fig = go.Figure()
@@ -288,7 +288,7 @@ def render_speedtest_chart(df):
             height=500
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 
 def render_hourly_analysis(df):
@@ -332,7 +332,7 @@ def render_hourly_analysis(df):
             xaxis=dict(tickmode='linear', dtick=2),
             height=400
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
     
     with col2:
         hourly_up = df.groupby('Stunde').agg({
@@ -366,7 +366,7 @@ def render_hourly_analysis(df):
             xaxis=dict(tickmode='linear', dtick=2),
             height=400
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
 
 def render_fritzbox_analysis(df):
@@ -455,7 +455,7 @@ def render_fritzbox_analysis(df):
     fig.update_yaxes(title_text="Fehleranzahl", row=1, col=1)
     fig.update_yaxes(title_text="Neue Fehler", row=2, col=1)
     
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
     
     # Signalpegel falls vorhanden
     if 'FB_Avg_DS_Power_dBmV' in df_fb.columns:
@@ -503,7 +503,7 @@ def render_fritzbox_analysis(df):
                 yaxis_title="Power Level (dBmV)",
                 height=350
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         
         with col2:
             if 'FB_Avg_US_Power_dBmV' in df_fb.columns:
@@ -529,7 +529,7 @@ def render_fritzbox_analysis(df):
                     yaxis_title="Power Level (dBmV)",
                     height=350
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
 
 def render_correlation_analysis(df):
@@ -559,7 +559,7 @@ def render_correlation_analysis(df):
             labels={'FB_Non_Corr_Errors': 'Kumulative Fehler'}
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         
         corr_down = df_fb['FB_Non_Corr_Errors'].corr(df_fb['Download (Mbit/s)'])
         st.info(f"📊 Korrelation: {corr_down:.3f}")
@@ -575,7 +575,7 @@ def render_correlation_analysis(df):
             labels={'FB_Non_Corr_Errors': 'Kumulative Fehler'}
         )
         fig.update_layout(height=400)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
         
         corr_up = df_fb['FB_Non_Corr_Errors'].corr(df_fb['Upload (Mbit/s)'])
         st.info(f"📊 Korrelation: {corr_up:.3f}")
@@ -597,12 +597,12 @@ def render_worst_measurements(df):
     with tab1:
         worst_download = df.nsmallest(10, 'Download (Mbit/s)')[cols].copy()
         worst_download['Datetime'] = worst_download['Datetime'].dt.strftime('%d.%m.%Y %H:%M')
-        st.dataframe(worst_download, use_container_width=True, hide_index=True)
+        st.dataframe(worst_download, width="stretch", hide_index=True)
     
     with tab2:
         worst_upload = df.nsmallest(10, 'Upload (Mbit/s)')[cols].copy()
         worst_upload['Datetime'] = worst_upload['Datetime'].dt.strftime('%d.%m.%Y %H:%M')
-        st.dataframe(worst_upload, use_container_width=True, hide_index=True)
+        st.dataframe(worst_upload, width="stretch", hide_index=True)
 
 
 def render_raw_data(df):
@@ -627,7 +627,7 @@ def render_raw_data(df):
         display_df = df[selected_cols].copy()
         if 'Datetime' in selected_cols:
             display_df['Datetime'] = display_df['Datetime'].dt.strftime('%d.%m.%Y %H:%M')
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
+        st.dataframe(display_df, width="stretch", hide_index=True)
         
         # Download-Button
         csv = df[selected_cols].to_csv(index=False, sep=';')

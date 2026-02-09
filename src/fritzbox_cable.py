@@ -32,7 +32,7 @@ import xml.etree.ElementTree as ET
 # ============================================================================
 
 DEFAULT_URL = os.environ.get("FRITZBOX_HOST", "http://fritz.box")
-DEFAULT_USER = os.environ.get("FRITZBOX_USER", "")
+DEFAULT_USER = os.environ.get("FRITZBOX_USERNAME", "")
 DEFAULT_PASSWORD = os.environ.get("FRITZBOX_PASSWORD", "")
 
 
