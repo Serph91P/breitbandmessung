@@ -53,71 +53,92 @@ class FritzBoxCable:
         self.session = requests.Session()
         self.session.timeout = 10
     
-    def login(self) -> bool:
+    def login(self, max_retries: int = 3) -> bool:
         """
         Meldet sich an der FritzBox an und holt eine Session-ID.
         Verwendet Challenge-Response mit MD5 (FritzBox Standard).
+        Wartet bei BlockTime automatisch und versucht erneut.
         """
         login_url = f"{self.url}/login_sid.lua"
         
-        try:
-            # Schritt 1: Challenge holen
-            response = self.session.get(login_url, timeout=10)
-            response.raise_for_status()
-        except requests.RequestException as e:
-            print(f"❌ Verbindungsfehler zu {self.url}: {e}")
-            return False
-        
-        try:
-            root = ET.fromstring(response.text)
-            challenge = root.find('Challenge').text
-            current_sid = root.find('SID').text
-        except Exception as e:
-            print(f"❌ Fehler beim Parsen der Login-Antwort: {e}")
-            return False
-        
-        # Prüfe ob bereits eine gültige Session existiert
-        if current_sid and current_sid != "0000000000000000":
-            self.sid = current_sid
-            return True
-        
-        # Schritt 2: Challenge-Response berechnen
-        # FritzBox erwartet: challenge-md5(challenge-password) 
-        # Encoding: UTF-16LE für den MD5-Hash
-        response_str = f"{challenge}-{self.password}"
-        
-        # UTF-16LE encoding für MD5 (FritzBox Spezifikation)
-        response_bytes = response_str.encode('utf-16-le')
-        response_hash = hashlib.md5(response_bytes).hexdigest()
-        response_value = f"{challenge}-{response_hash}"
-        
-        # Schritt 3: Login mit Username und Response
-        login_data = {'response': response_value}
-        if self.user:
-            login_data['username'] = self.user
-        
-        try:
-            response = self.session.post(login_url, data=login_data, timeout=10)
-            response.raise_for_status()
-            root = ET.fromstring(response.text)
-            self.sid = root.find('SID').text
-        except Exception as e:
-            print(f"❌ Login-Fehler: {e}")
-            return False
-        
-        if not self.sid or self.sid == "0000000000000000":
-            # Prüfe ob BlockTime gesetzt ist
+        for attempt in range(1, max_retries + 1):
+            try:
+                # Schritt 1: Challenge holen
+                response = self.session.get(login_url, timeout=10)
+                response.raise_for_status()
+            except requests.RequestException as e:
+                print(f"❌ Verbindungsfehler zu {self.url}: {e}")
+                return False
+            
+            try:
+                root = ET.fromstring(response.text)
+                challenge = root.find('Challenge').text
+                current_sid = root.find('SID').text
+            except Exception as e:
+                print(f"❌ Fehler beim Parsen der Login-Antwort: {e}")
+                return False
+            
+            # Prüfe ob BlockTime aktiv ist (von vorherigen Fehlversuchen)
             try:
                 block_time = root.find('BlockTime').text
                 if block_time and int(block_time) > 0:
-                    print(f"❌ Login blockiert für {block_time} Sekunden (zu viele Fehlversuche)")
-                    return False
-            except:
+                    wait = int(block_time) + 1
+                    print(f"⏳ FritzBox BlockTime aktiv ({block_time}s) - warte {wait}s... (Versuch {attempt}/{max_retries})")
+                    import time
+                    time.sleep(wait)
+                    continue
+            except (AttributeError, ValueError):
                 pass
-            print("❌ Login fehlgeschlagen - falsches Passwort oder Benutzername?")
-            return False
+            
+            # Prüfe ob bereits eine gültige Session existiert
+            if current_sid and current_sid != "0000000000000000":
+                self.sid = current_sid
+                return True
+            
+            # Schritt 2: Challenge-Response berechnen
+            response_str = f"{challenge}-{self.password}"
+            response_bytes = response_str.encode('utf-16-le')
+            response_hash = hashlib.md5(response_bytes).hexdigest()
+            response_value = f"{challenge}-{response_hash}"
+            
+            # Schritt 3: Login mit Username und Response
+            login_data = {'response': response_value}
+            if self.user:
+                login_data['username'] = self.user
+            
+            try:
+                response = self.session.post(login_url, data=login_data, timeout=10)
+                response.raise_for_status()
+                root = ET.fromstring(response.text)
+                self.sid = root.find('SID').text
+            except Exception as e:
+                print(f"❌ Login-Fehler: {e}")
+                return False
+            
+            if not self.sid or self.sid == "0000000000000000":
+                # Prüfe ob BlockTime gesetzt ist nach Login-Versuch
+                try:
+                    block_time = root.find('BlockTime').text
+                    if block_time and int(block_time) > 0:
+                        if attempt < max_retries:
+                            wait = int(block_time) + 1
+                            print(f"⏳ Login fehlgeschlagen, BlockTime {block_time}s - warte {wait}s... (Versuch {attempt}/{max_retries})")
+                            import time
+                            time.sleep(wait)
+                            continue
+                        else:
+                            print(f"❌ Login nach {max_retries} Versuchen fehlgeschlagen (BlockTime: {block_time}s)")
+                            return False
+                except (AttributeError, ValueError):
+                    pass
+                print("❌ Login fehlgeschlagen - falsches Passwort oder Benutzername?")
+                return False
+            
+            print(f"✓ FritzBox Login erfolgreich")
+            return True
         
-        return True
+        print(f"❌ Login nach {max_retries} Versuchen fehlgeschlagen")
+        return False
     
     def _get_page(self, page: str) -> dict | None:
         """Ruft eine FritzBox data.lua Seite ab."""

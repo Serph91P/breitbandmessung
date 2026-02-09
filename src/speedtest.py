@@ -79,6 +79,7 @@ def get_fritzbox_cable_info():
     
     try:
         print("\n📡 Lese FritzBox Daten (ALLE verfügbaren)...", flush=True)
+        print(f"  Host: {FRITZBOX_HOST}, User: {FRITZBOX_USER}, Pass: {'***' if FRITZBOX_PASSWORD else '(leer!)'}", flush=True)
         
         # Nutze das neue Modul mit Session-basiertem Login
         with FritzBoxCable(FRITZBOX_HOST, FRITZBOX_USER, FRITZBOX_PASSWORD) as fb:

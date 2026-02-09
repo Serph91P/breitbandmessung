@@ -19,7 +19,7 @@ COPY app.py ./
 
 # Streamlit Konfiguration
 RUN mkdir -p ~/.streamlit
-RUN echo '[server]\nheadless = true\nport = 8501\nenableCORS = false\n\n[browser]\ngatherUsageStats = false' > ~/.streamlit/config.toml
+RUN echo '[server]\nheadless = true\nport = 8501\nenableXsrfProtection = false\nenableCORS = false\n\n[browser]\ngatherUsageStats = false' > ~/.streamlit/config.toml
 
 # Port
 EXPOSE 8501
