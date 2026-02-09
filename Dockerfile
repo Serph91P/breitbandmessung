@@ -1,4 +1,4 @@
-FROM python:3.13-slim-bullseye
+FROM python:3.14-slim
 
 LABEL maintainer="Breitbandmessung" \
       description="Einfacher Speedtest mit CSV-Export" \
