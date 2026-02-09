@@ -1,0 +1,22 @@
+# Messdaten
+messprotokolle/
+!messprotokolle/.gitkeep
+
+# Config
+config/config.cfg
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Misc
+*.log
+*.png
+messergebnisse.csv
+docsis_historie.csv
