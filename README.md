@@ -23,7 +23,7 @@ breitbandmessung/
 │   ├── Dockerfile          # Dashboard Container
 │   └── requirements.txt    # Python-Abhängigkeiten
 ├── config.ini              # Hauptkonfiguration
-├── docker-compose.yml      # Multi-Container Setup
+├── compose.yaml            # Multi-Container Setup
 ├── Dockerfile              # Speedtest Container
 └── entrypoint.sh           # Container Startpunkt
 ```
@@ -55,20 +55,7 @@ username = admin
 password = dein_passwort
 ```
 
-### 3. Umgebungsvariablen setzen
-
-```bash
-cp .env.example .env
-```
-
-Bearbeite `.env`:
-
-```env
-EXPORT_PATH=./messprotokolle
-DASHBOARD_PORT=8501
-```
-
-### 4. Container starten
+### 3. Container starten
 
 ```bash
 # Alles starten (Speedtest + Dashboard)
@@ -81,7 +68,7 @@ docker compose up -d dashboard
 docker compose up -d speedtest
 ```
 
-### 5. Dashboard öffnen
+### 4. Dashboard öffnen
 
 Öffne im Browser: **http://localhost:8501**
 
@@ -118,8 +105,10 @@ Das Web-Dashboard bietet:
 
 | Variable | Standard | Beschreibung |
 |----------|----------|--------------|
-| `EXPORT_PATH` | `./messprotokolle` | Speicherort für Messdaten |
+| `CONFIG_PATH` | `./config.ini` | Pfad zur Konfigurationsdatei |
 | `DASHBOARD_PORT` | `8501` | Port für Web-Dashboard |
+
+Messdaten werden in einem benannten Docker Volume (`breitbandmessung-messprotokolle`) gespeichert und überleben Container-Neustarts und Redeployments.
 
 ## 📡 FritzBox Integration
 
@@ -133,12 +122,6 @@ Bei aktivierter FritzBox-Integration werden zusätzliche Daten erfasst:
 Diese Daten werden in der CSV mit `FB_*` Präfix gespeichert.
 
 ## 🛠️ Entwicklung
-
-### Manuell Daten aktualisieren
-
-```bash
-python scripts/update_data.py ./messprotokolle
-```
 
 ### Dashboard lokal starten
 
@@ -168,7 +151,7 @@ docker logs -f breitbandmessung-dashboard
 ## 🆘 Troubleshooting
 
 ### Dashboard zeigt "Keine Daten"
-- Prüfe ob `messprotokolle/` Ordner existiert und CSV-Dateien enthält
+- Prüfe ob das Volume `breitbandmessung-messprotokolle` Daten enthält: `docker volume inspect breitbandmessung-messprotokolle`
 - Führe mindestens eine Messung durch
 
 ### FritzBox-Daten fehlen
