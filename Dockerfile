@@ -6,7 +6,14 @@ LABEL maintainer="Breitbandmessung" \
 
 ENV PYTHONUNBUFFERED=1 \
     MOZ_HEADLESS=1 \
-    GECKODRIVER_VERSION=0.34.0
+    GECKODRIVER_VERSION=0.34.0 \
+    TZ=Europe/Berlin \
+    CRON_SCHEDULE="0 */2 * * *" \
+    RUN_ON_STARTUP=true \
+    RUN_ONCE=false \
+    SAVE_SCREENSHOTS=true \
+    EXPORT_PATH=/export \
+    DOCSIGHT_EXPORT_PATH=/export/docsight
 
 WORKDIR /usr/src/app
 
@@ -19,9 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Installiere Python-Pakete (Selenium + Requests für FritzBox)
+# Installiere Python-Pakete
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir selenium requests
+    pip3 install --no-cache-dir selenium
 
 # Installiere Geckodriver
 RUN set -eux; \
@@ -38,11 +45,7 @@ RUN set -eux; \
 
 # Kopiere Dateien
 COPY src/speedtest.py ./
-COPY src/fritzbox_cable.py ./
-COPY src/database.py ./
-COPY src/import_csv.py ./
 COPY entrypoint.sh /usr/local/bin/
-COPY config.ini /usr/src/app/config/config.ini.default
 
 # Berechtigungen
 RUN chmod +x /usr/src/app/speedtest.py /usr/local/bin/entrypoint.sh && \

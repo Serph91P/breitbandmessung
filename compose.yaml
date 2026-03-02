@@ -1,25 +1,26 @@
 services:
   # ============================================
-  # Speedtest Service - Führt automatische Messungen durch
+  # Speedtest Service - Automatische BNetzA Messungen
+  # CSVs werden via shared Volume an DOCSight übergeben
   # ============================================
   speedtest:
     build: .
-    image: breitbandmessung:latest
+    image: ghcr.io/serph91p/breitbandmessung:latest
     container_name: breitbandmessung-speedtest
     restart: unless-stopped
     
     volumes:
-      # Messprotokolle - persistentes Volume
+      # Messprotokolle - lokale CSV-Kopie
       - messprotokolle:/export
-      # Config - persistentes Volume (Default wird beim ersten Start kopiert)
-      - config:/usr/src/app/config
+      # Shared Volume für DOCSight BNetzA Import
+      - bnetz_data:/export/docsight
     
     environment:
-      # FritzBox-Zugangsdaten (überschreiben config.ini)
-      - FRITZBOX_ENABLED=${FRITZBOX_ENABLED:-}
-      - FRITZBOX_HOST=${FRITZBOX_HOST:-}
-      - FRITZBOX_USERNAME=${FRITZBOX_USERNAME:-}
-      - FRITZBOX_PASSWORD=${FRITZBOX_PASSWORD:-}
+      - TZ=${TZ:-Europe/Berlin}
+      - CRON_SCHEDULE=${CRON_SCHEDULE:-0 */2 * * *}
+      - RUN_ON_STARTUP=${RUN_ON_STARTUP:-true}
+      - RUN_ONCE=${RUN_ONCE:-false}
+      - SAVE_SCREENSHOTS=${SAVE_SCREENSHOTS:-true}
     
     logging:
       driver: "json-file"
@@ -27,40 +28,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  # ============================================
-  # Dashboard Service - Web-Interface für Analyse
-  # ============================================
-  dashboard:
-    build: ./dashboard
-    image: breitbandmessung-dashboard:latest
-    container_name: breitbandmessung-dashboard
-    restart: unless-stopped
-    
-    ports:
-      - "${DASHBOARD_PORT:-8501}:8501"
-    
-    volumes:
-      # Messdaten - gleiches Volume (write für SQLite WAL)
-      - messprotokolle:/data
-    
-    environment:
-      - STREAMLIT_SERVER_HEADLESS=true
-      - STREAMLIT_BROWSER_GATHER_USAGE_STATS=false
-    
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "5m"
-        max-file: "2"
-    
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
 volumes:
   messprotokolle:
     name: breitbandmessung-messprotokolle
-  config:
-    name: breitbandmessung-config
+  bnetz_data:
+    name: shared-bnetz-data

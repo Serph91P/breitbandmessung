@@ -1,180 +1,87 @@
-# 🚀 Breitbandmessung mit Dashboard
+# Breitbandmessung
 
-Automatisierte Speedtests mit CSV-Export + FritzBox DOCSIS-Diagnose + **Web-Dashboard**.
+Automatisierte BNetzA-Speedtests mit CSV-Export für [DOCSight](https://github.com/itsdnns/docsight).
 
-## ✨ Features
+## Features
 
-- ✅ Automatische Speedtests via [breitbandmessung.de](https://breitbandmessung.de/test)
-- 📊 CSV-Export aller Messergebnisse
-- 📡 **FritzBox Cable-Daten** (DOCSIS-Fehler, Signalpegel, etc.)
-- 📈 **Web-Dashboard** für interaktive Analyse
-- ⏰ Flexibler Zeitplan (Cron)
-- 🐳 Docker & Docker Compose
+- Automatische Speedtests via [breitbandmessung.de](https://breitbandmessung.de/test)
+- CSV-Export für DOCSight BNetzA Integration (shared Volume)
+- Flexibler Zeitplan (Cron) via Environment-Variablen
+- Docker & Docker Compose
 
-## 📂 Projektstruktur
+## Projektstruktur
 
 ```
 breitbandmessung/
-├── src/                    # Python-Anwendung
-│   ├── speedtest.py        # Speedtest-Logik
-│   └── fritzbox_cable.py   # FritzBox Modul
-├── dashboard/              # Streamlit Web-Dashboard
-│   ├── app.py              # Dashboard-Anwendung
-│   ├── Dockerfile          # Dashboard Container
-│   └── requirements.txt    # Python-Abhängigkeiten
-├── config.ini              # Hauptkonfiguration
-├── compose.yaml            # Multi-Container Setup
-├── Dockerfile              # Speedtest Container
+├── src/
+│   └── speedtest.py        # Speedtest + DOCSight CSV-Export
+├── compose.yaml            # Docker Compose
+├── Dockerfile              # Container
 └── entrypoint.sh           # Container Startpunkt
 ```
 
-## 🚀 Schnellstart
-
-### 1. Repository klonen
+## Schnellstart
 
 ```bash
-git clone https://github.com/Serph91P/breitbandmessung.git
-cd breitbandmessung
-```
-
-### 2. Konfiguration anpassen
-
-Bearbeite `config.ini`:
-
-```ini
-[Schedule]
-cron_schedule = 0 */2 * * *    # Alle 2 Stunden
-timezone = Europe/Berlin
-run_once = false
-run_on_startup = true
-
-[FritzBox]
-enabled = true                  # FritzBox-Daten auslesen
-host = 192.168.178.1
-username = admin
-password = dein_passwort
-```
-
-### 3. Container starten
-
-```bash
-# Alles starten (Speedtest + Dashboard)
 docker compose up -d
-
-# Nur Dashboard starten
-docker compose up -d dashboard
-
-# Nur Speedtest starten
-docker compose up -d speedtest
 ```
 
-### 4. Dashboard öffnen
+Konfiguration über Environment-Variablen in der `compose.yaml`:
 
-Öffne im Browser: **http://localhost:8501**
+```yaml
+environment:
+  - TZ=Europe/Berlin
+  - CRON_SCHEDULE=0 */2 * * *
+  - RUN_ON_STARTUP=true
+  - RUN_ONCE=false
+  - SAVE_SCREENSHOTS=true
+```
 
-## 📊 Dashboard Features
+## DOCSight Integration
 
-Das Web-Dashboard bietet:
+Die CSVs werden automatisch in ein shared Docker Volume (`shared-bnetz-data`) exportiert. DOCSight's File Watcher importiert diese alle 5 Minuten.
 
-- **Übersicht**: KPIs und wichtigste Statistiken
-- **Zeitverlauf**: Download/Upload-Geschwindigkeit über Zeit
-- **Tageszeit-Analyse**: Performance nach Uhrzeit
-- **DOCSIS-Analyse**: FritzBox Fehlerauswertung
-- **Korrelation**: Zusammenhang Fehler ↔ Geschwindigkeit
-- **Probleme**: Liste der schlechtesten Messungen
-- **Rohdaten**: Export als CSV
+**Voraussetzung:** DOCSight muss dasselbe Volume mounten:
 
-## 🔧 Konfiguration
+```yaml
+# In DOCSight compose.yaml
+volumes:
+  - bnetz_data:/data/bnetz
 
-### config.ini
+volumes:
+  bnetz_data:
+    name: shared-bnetz-data
+```
 
-| Sektion | Option | Beschreibung |
-|---------|--------|--------------|
-| `[Schedule]` | `cron_schedule` | Cron-Ausdruck für Zeitplan |
-| | `timezone` | Zeitzone |
-| | `run_once` | Einmalig ausführen (true/false) |
-| | `run_on_startup` | Bei Start messen |
-| `[FritzBox]` | `enabled` | FritzBox-Daten auslesen |
-| | `host` | FritzBox IP-Adresse |
-| | `username` | FritzBox Benutzer |
-| | `password` | FritzBox Passwort |
-| `[Settings]` | `export_path` | Pfad für CSV-Dateien |
-| | `save_screenshots` | Screenshots speichern |
+DOCSight Environment-Variablen:
+```
+BNETZ_WATCH_ENABLED=true
+BNETZ_WATCH_DIR=/data/bnetz
+```
 
-### Umgebungsvariablen (.env)
+## Environment-Variablen
 
-| Variable | Standard | Beschreibung |
-|----------|----------|--------------|
-| `DASHBOARD_PORT` | `8501` | Port für Web-Dashboard |
-| `FRITZBOX_ENABLED` | - | FritzBox aktivieren (`true`/`false`) |
-| `FRITZBOX_HOST` | `192.168.178.1` | FritzBox IP-Adresse |
-| `FRITZBOX_USERNAME` | - | FritzBox Benutzer |
-| `FRITZBOX_PASSWORD` | - | FritzBox Passwort |
+| Variable | Default | Beschreibung |
+|----------|---------|--------------|
+| `TZ` | `Europe/Berlin` | Zeitzone |
+| `CRON_SCHEDULE` | `0 */2 * * *` | Cron-Schedule für Messungen |
+| `RUN_ON_STARTUP` | `true` | Bei Start sofort messen |
+| `RUN_ONCE` | `false` | Einmalig messen und beenden |
+| `SAVE_SCREENSHOTS` | `true` | Screenshots speichern |
 
-Environment-Variablen überschreiben die Werte aus `config.ini` — ideal für Komodo/Secrets.
-
-### Daten-Persistenz
+## Volumes
 
 | Volume | Beschreibung |
 |--------|--------------|
-| `breitbandmessung-messprotokolle` | CSV-Dateien, Screenshots, DOCSIS-Daten |
-| `breitbandmessung-config` | config.ini (wird beim ersten Start mit Defaults befüllt) |
+| `breitbandmessung-messprotokolle` | Lokale CSV-Dateien + Screenshots |
+| `shared-bnetz-data` | Shared mit DOCSight |
 
-## 📡 FritzBox Integration
-
-Bei aktivierter FritzBox-Integration werden zusätzliche Daten erfasst:
-
-- **DOCSIS Downstream**: Signalpegel, MER/MSE, korrigierbare/nicht-korrigierbare Fehler
-- **DOCSIS Upstream**: Sendepegel pro Kanal
-- **Verbindungsinfo**: IP, Verbindungsdauer, max. Geschwindigkeit
-- **Fehleranalyse**: Problem-Kanäle, Fehlerzuwachs
-
-Diese Daten werden in der CSV mit `FB_*` Präfix gespeichert.
-
-## 🛠️ Entwicklung
-
-### Dashboard lokal starten
+## Logs
 
 ```bash
-cd dashboard
-pip install -r requirements.txt
-streamlit run app.py
-```
-
-### Container neu bauen
-
-```bash
-docker compose build --no-cache
-docker compose up -d
-```
-
-## 📋 Logs
-
-```bash
-# Speedtest Logs
 docker logs -f breitbandmessung-speedtest
-
-# Dashboard Logs
-docker logs -f breitbandmessung-dashboard
 ```
 
-## 🆘 Troubleshooting
-
-### Dashboard zeigt "Keine Daten"
-- Prüfe ob das Volume `breitbandmessung-messprotokolle` Daten enthält: `docker volume inspect breitbandmessung-messprotokolle`
-- Führe mindestens eine Messung durch
-
-### FritzBox-Daten fehlen
-- Prüfe `[FritzBox] enabled = true` in config.ini
-- Prüfe Zugangsdaten (username/password)
-- Stelle sicher dass FritzBox erreichbar ist
-
-### Container startet nicht
-```bash
-docker compose logs speedtest
-docker compose logs dashboard
-```
-
-## 📄 Lizenz
+## Lizenz
 
 MIT License

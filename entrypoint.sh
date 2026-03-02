@@ -6,27 +6,7 @@ echo "  🚀 Breitbandmessung"
 echo "=========================================="
 echo ""
 
-# Config: Falls keine config.ini vorhanden, nutze Default
-CONFIG_FILE="/usr/src/app/config/config.ini"
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "ℹ️  Keine config.ini gefunden, nutze Defaults"
-    cp /usr/src/app/config/config.ini.default "$CONFIG_FILE"
-fi
-
-# Einfache INI-Parsing-Funktion
-get_config() {
-    local key=$1
-    local section=$2
-    # Lese Wert und entferne nur führende/nachfolgende Leerzeichen
-    grep -A 20 "\[$section\]" "$CONFIG_FILE" | grep "^$key" | cut -d'=' -f2- | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | sed 's/#.*//'
-}
-
-# Lade Einstellungen
-TZ=$(get_config "timezone" "Schedule")
-CRON_SCHEDULE=$(get_config "cron_schedule" "Schedule")
-RUN_ONCE=$(get_config "run_once" "Schedule")
-RUN_ON_STARTUP=$(get_config "run_on_startup" "Schedule")
-
+# Lade Einstellungen aus Environment (Defaults im Dockerfile)
 echo "⚙️  Konfiguration:"
 echo "  🌍 Zeitzone:     $TZ"
 echo "  ⏰ Schedule:     $CRON_SCHEDULE"
@@ -41,22 +21,6 @@ if [ -n "$TZ" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
 fi
 
 export MOZ_HEADLESS=1
-
-# Datenbank: Initialisieren und ggf. CSV-Import
-DB_FILE="/export/measurements.db"
-if [ ! -f "$DB_FILE" ]; then
-    echo "=========================================="
-    echo "  💾 Initialisiere Datenbank..."
-    echo "=========================================="
-    CSV_COUNT=$(find /export -name "Breitbandmessung_*.csv" ! -name "*_docsis.csv" 2>/dev/null | wc -l)
-    if [ "$CSV_COUNT" -gt 0 ]; then
-        echo "📊 $CSV_COUNT bestehende CSV-Dateien gefunden, importiere und lösche..."
-        python3 /usr/src/app/import_csv.py /export "$DB_FILE" --delete
-    else
-        echo "ℹ️  Keine bestehenden CSV-Dateien, DB wird beim ersten Test erstellt"
-    fi
-    echo ""
-fi
 
 # Bei Startup ausführen?
 if [ "$RUN_ON_STARTUP" = "true" ]; then
@@ -82,7 +46,7 @@ if [ "$RUN_ONCE" = "false" ]; then
     # Validiere Cron-Schedule
     if [ -z "$CRON_SCHEDULE" ]; then
         echo "❌ FEHLER: Kein Cron-Schedule konfiguriert!"
-        echo "Bitte prüfe config.ini"
+        echo "Setze CRON_SCHEDULE in der compose.yaml"
         exit 1
     fi
     
