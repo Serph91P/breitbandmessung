@@ -20,7 +20,7 @@ services:
       - CRON_SCHEDULE=${CRON_SCHEDULE:-0 */2 * * *}
       - RUN_ON_STARTUP=${RUN_ON_STARTUP:-true}
       - RUN_ONCE=${RUN_ONCE:-false}
-      - SAVE_SCREENSHOTS=${SAVE_SCREENSHOTS:-true}
+      - SAVE_SCREENSHOTS=${SAVE_SCREENSHOTS:-false}
     
     logging:
       driver: "json-file"
