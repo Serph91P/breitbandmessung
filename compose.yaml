@@ -4,16 +4,13 @@ services:
   # CSVs werden via shared Volume an DOCSight übergeben
   # ============================================
   speedtest:
-    build: .
     image: ghcr.io/serph91p/breitbandmessung:latest
     container_name: breitbandmessung-speedtest
     restart: unless-stopped
     
     volumes:
-      # Messprotokolle - lokale CSV-Kopie
-      - messprotokolle:/export
       # Shared Volume für DOCSight BNetzA Import
-      - bnetz_data:/export/docsight
+      - bnetz_data:/export
     
     environment:
       - TZ=${TZ:-Europe/Berlin}
@@ -29,7 +26,5 @@ services:
         max-file: "3"
 
 volumes:
-  messprotokolle:
-    name: breitbandmessung-messprotokolle
   bnetz_data:
     name: shared-bnetz-data
