@@ -20,7 +20,6 @@ import shutil
 
 # Einstellungen aus Environment (Defaults im Dockerfile)
 EXPORT_PATH = os.environ.get("EXPORT_PATH", "/export")
-DOCSIGHT_EXPORT_PATH = os.environ.get("DOCSIGHT_EXPORT_PATH", "/export/docsight")
 SLEEPTIME = int(os.environ.get("WAIT_TIME", "10"))
 SAVE_SCREENSHOTS = os.environ.get("SAVE_SCREENSHOTS", "true").lower() in ("true", "1", "yes")
 
@@ -55,11 +54,9 @@ def cleanup_firefox():
 
 
 def ensure_export_directory():
-    """Stelle sicher, dass die Export-Verzeichnisse existieren"""
+    """Stelle sicher, dass das Export-Verzeichnis existiert"""
     os.makedirs(EXPORT_PATH, exist_ok=True)
     print(f"✓ Export-Verzeichnis: {EXPORT_PATH}", flush=True)
-    os.makedirs(DOCSIGHT_EXPORT_PATH, exist_ok=True)
-    print(f"✓ DOCSight-Verzeichnis: {DOCSIGHT_EXPORT_PATH}", flush=True)
 
 
 def run_speedtest():
@@ -144,11 +141,6 @@ def run_speedtest():
         print(f"  📤 Upload:   {upload} Mbit/s")
         print(f"  ⚡ Ping:     {ping} ms")
         print("=" * 50)
-
-        # CSV für DOCSight exportieren
-        docsight_csv = os.path.join(DOCSIGHT_EXPORT_PATH, os.path.basename(latest_csv))
-        shutil.copy2(latest_csv, docsight_csv)
-        print(f"📤 CSV für DOCSight exportiert: {os.path.basename(docsight_csv)}", flush=True)
 
         print(f"💾 CSV gespeichert: {os.path.basename(latest_csv)}", flush=True)
 
