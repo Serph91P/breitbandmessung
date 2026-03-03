@@ -1,0 +1,11 @@
+# Hadolint Configuration
+ignored:
+  # DL3008: Pin versions in apt-get install (not practical for security updates)
+  - DL3008
+  # DL3013: Pin versions in pip install (selenium updates are desired)
+  - DL3013
+  # DL3003: Use WORKDIR instead of cd (not applicable here)
+  - DL3003
+
+trustedRegistries:
+  - docker.io
