@@ -14,12 +14,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Bump version and create tag
+        id: tag
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+
+      - name: Create GitHub Release
+        if: steps.tag.outputs.new_tag
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.new_tag }}
+          name: ${{ steps.tag.outputs.new_tag }}
+          body: ${{ steps.tag.outputs.changelog }}
+          generate_release_notes: true
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -43,8 +63,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Docker meta
-        id: meta
+      - name: Docker meta (release)
+        id: meta-release
+        if: steps.tag.outputs.new_tag
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ env.DOCKERHUB_IMAGE }}
+            ${{ env.GHCR_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}},value=${{ steps.tag.outputs.new_tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.tag.outputs.new_tag }}
+            type=semver,pattern={{major}},value=${{ steps.tag.outputs.new_tag }}
+            type=raw,value=latest
+
+      - name: Docker meta (branch)
+        id: meta-branch
+        if: "!steps.tag.outputs.new_tag"
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -52,11 +87,7 @@ jobs:
             ${{ env.GHCR_IMAGE }}
           tags: |
             type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
             type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -64,7 +95,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta-release.outputs.tags || steps.meta-branch.outputs.tags }}
+          labels: ${{ steps.meta-release.outputs.labels || steps.meta-branch.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
