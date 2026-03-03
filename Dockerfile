@@ -6,7 +6,7 @@ LABEL maintainer="Breitbandmessung" \
 
 ENV PYTHONUNBUFFERED=1 \
     MOZ_HEADLESS=1 \
-    GECKODRIVER_VERSION=0.34.0 \
+    GECKODRIVER_VERSION=0.36.0 \
     TZ=Europe/Berlin \
     CRON_SCHEDULE="0 */2 * * *" \
     RUN_ON_STARTUP=true \
@@ -17,8 +17,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /usr/src/app
 
-# Installiere nur das Nötigste
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Installiere nur das Nötigste + Sicherheitsupdates
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
     firefox-esr \
     tini \
     cron \
@@ -30,7 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir selenium
 
-# Installiere Geckodriver
+# Installiere Geckodriver und entferne wget danach
 RUN set -eux; \
     dpkgArch="$(dpkg --print-architecture)"; \
     case "${dpkgArch##*-}" in \
@@ -41,7 +43,8 @@ RUN set -eux; \
     wget -q "https://github.com/mozilla/geckodriver/releases/download/v${GECKODRIVER_VERSION}/geckodriver-v${GECKODRIVER_VERSION}-${geckoArch}.tar.gz" -O /tmp/geckodriver.tar.gz; \
     tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin/; \
     chmod +x /usr/local/bin/geckodriver; \
-    rm /tmp/geckodriver.tar.gz
+    rm /tmp/geckodriver.tar.gz; \
+    apt-get purge -y --auto-remove wget
 
 # Kopiere Dateien
 COPY src/speedtest.py ./
