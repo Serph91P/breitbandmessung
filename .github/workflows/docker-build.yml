@@ -5,7 +5,7 @@ on:
     branches: [main, develop]
     tags: ['v*']
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 env:
   DOCKERHUB_IMAGE: frequency2098/breitbandmessung
