@@ -25,6 +25,7 @@ jobs:
         with:
           scan-type: 'fs'
           scan-ref: '.'
+          trivyignores: '.trivyignore'
           format: 'sarif'
           output: 'trivy-fs-results.sarif'
           severity: 'CRITICAL,HIGH'
@@ -62,6 +63,7 @@ jobs:
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: 'breitbandmessung:scan'
+          trivyignores: '.trivyignore'
           format: 'sarif'
           output: 'trivy-image-results.sarif'
           severity: 'CRITICAL,HIGH'

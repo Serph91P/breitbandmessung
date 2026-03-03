@@ -1,0 +1,50 @@
+# Trivy Ignore File
+# Unfixbare CVEs in Debian-Basispaketen (kein Patch in stable verfügbar)
+# Wird bei jedem Base-Image-Update überprüft
+
+# ===== glibc (kein Fix in Debian stable) =====
+CVE-2010-4756   # glob: excessive CPU/memory with crafted expressions
+CVE-2018-20796  # regexec.c: uncontrolled recursion
+CVE-2019-1010022 # stack guard protection bypass
+CVE-2019-1010023 # ldd on malicious ELF
+CVE-2019-1010024 # ASLR bypass via thread stack cache
+CVE-2019-1010025 # information disclosure heap addresses
+CVE-2019-9192   # regexec.c: uncontrolled recursion
+
+# ===== util-linux =====
+CVE-2022-0563   # chfn/chsh partial disclosure (requires local access)
+
+# ===== systemd =====
+CVE-2013-4392   # TOCTOU race condition (low severity, old)
+CVE-2023-31437  # sealed data modification (low)
+CVE-2023-31438  # sealed data truncation (low)
+CVE-2023-31439  # sealed data configuration modification (low)
+
+# ===== krb5 =====
+CVE-2018-5709   # integer overflow in kadmin (low)
+CVE-2024-26458  # memory leak pmap_rmt.c (low)
+CVE-2024-26461  # memory leak k5sealv3.c (low)
+
+# ===== shadow-utils =====
+CVE-2024-56433  # Default subordinate ID config (low)
+CVE-2007-5686   # insecure permissions (low, very old)
+
+# ===== apt =====
+CVE-2011-3374   # apt-key validation (low)
+
+# ===== tar =====
+CVE-2005-2541   # tar permissions (low, very old)
+TEMP-0290435-0B57B5 # tar rmt side effects
+
+# ===== sysvinit =====
+TEMP-0517018-A83CE6 # no-root option
+TEMP-0841856-B18BAF # privilege escalation
+
+# ===== misc low severity =====
+TEMP-0628843-DBAD28 # related to CVE-2005-4890
+CVE-2017-18018  # coreutils (low)
+CVE-2019-12383  # alpine-keys (low)
+CVE-2011-3389   # BEAST TLS attack (mitigated in modern TLS)
+CVE-2011-4116   # perl: File::Temp race condition (low)
+CVE-2012-0039   # GLib: hash table predictable collisions (low)
+CVE-2014-8166   # cups filter (low)
