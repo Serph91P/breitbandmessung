@@ -52,8 +52,8 @@ if [ "$RUN_ONCE" = "false" ]; then
     
     echo "📅 Cron Schedule: '$CRON_SCHEDULE'"
     
-    # Exportiere Umgebung für Cron
-    printenv | sed 's/^\(.*\)$/export \1/g' > /root/env.sh
+    # Exportiere Umgebung für Cron (Werte quoten wegen Sonderzeichen wie * im Schedule)
+    printenv | sed 's/\([^=]*\)=\(.*\)/export \1="\2"/' > /root/env.sh
     
     # Erstelle Cron-Job
     echo "$CRON_SCHEDULE . /root/env.sh && /usr/src/app/speedtest.py >> /proc/1/fd/1 2>&1" | crontab -
