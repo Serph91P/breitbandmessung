@@ -18,11 +18,12 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /usr/src/app
 
 # Installiere nur das Nötigste (Alpine)
+# hadolint ignore=DL3018
 RUN apk add --no-cache \
     firefox-esr \
     tini \
     tzdata \
-    procps
+    procps-ng
 
 # Installiere Python-Pakete
 RUN pip3 install --no-cache-dir --upgrade pip && \
