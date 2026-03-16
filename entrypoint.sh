@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 echo "=========================================="
@@ -75,8 +75,8 @@ if [ "$RUN_ONCE" = "false" ]; then
     echo "   Nächste Messung gemäß Zeitplan"
     echo ""
     
-    # Starte Cron
-    cron -f
+    # Starte Cron (Alpine busybox crond)
+    crond -f -l 2
 else
     echo "🔄 Einmal-Modus - führe Messung durch..."
     /usr/src/app/speedtest.py

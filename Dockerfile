@@ -1,8 +1,8 @@
-FROM python:3.14-slim
+FROM python:3.14-alpine
 
 LABEL maintainer="Breitbandmessung" \
       description="Einfacher Speedtest mit CSV-Export" \
-      version="3.0-simple"
+      version="3.0-alpine"
 
 ENV PYTHONUNBUFFERED=1 \
     MOZ_HEADLESS=1 \
@@ -17,34 +17,29 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /usr/src/app
 
-# Installiere nur das Nötigste + Sicherheitsupdates
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get install -y --no-install-recommends \
+# Installiere nur das Nötigste (Alpine)
+RUN apk add --no-cache \
     firefox-esr \
     tini \
-    cron \
-    wget \
-    procps \
-    && rm -rf /var/lib/apt/lists/*
+    tzdata \
+    procps
 
 # Installiere Python-Pakete
 RUN pip3 install --no-cache-dir --upgrade pip && \
     pip3 install --no-cache-dir selenium
 
-# Installiere Geckodriver und entferne wget danach
+# Installiere Geckodriver
 RUN set -eux; \
-    dpkgArch="$(dpkg --print-architecture)"; \
-    case "${dpkgArch##*-}" in \
-        amd64) geckoArch='linux64' ;; \
-        arm64) geckoArch='linux-aarch64' ;; \
-        *) echo >&2 "Unsupported arch: ${dpkgArch}"; exit 1 ;; \
+    arch="$(uname -m)"; \
+    case "${arch}" in \
+        x86_64) geckoArch='linux64' ;; \
+        aarch64) geckoArch='linux-aarch64' ;; \
+        *) echo >&2 "Unsupported arch: ${arch}"; exit 1 ;; \
     esac; \
     wget -q "https://github.com/mozilla/geckodriver/releases/download/v${GECKODRIVER_VERSION}/geckodriver-v${GECKODRIVER_VERSION}-${geckoArch}.tar.gz" -O /tmp/geckodriver.tar.gz; \
     tar -xzf /tmp/geckodriver.tar.gz -C /usr/local/bin/; \
     chmod +x /usr/local/bin/geckodriver; \
-    rm /tmp/geckodriver.tar.gz; \
-    apt-get purge -y --auto-remove wget
+    rm /tmp/geckodriver.tar.gz
 
 # Kopiere Dateien
 COPY src/speedtest.py ./
