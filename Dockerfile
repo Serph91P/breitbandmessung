@@ -23,7 +23,8 @@ RUN apk add --no-cache \
     firefox-esr \
     tini \
     tzdata \
-    procps-ng
+    procps-ng \
+    gcompat
 
 # Installiere Python-Pakete
 RUN pip3 install --no-cache-dir --upgrade pip && \
