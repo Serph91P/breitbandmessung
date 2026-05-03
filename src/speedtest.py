@@ -69,7 +69,8 @@ def run_speedtest():
     # Browser konfigurieren
     print("\n🌐 Öffne Browser...")
     options = webdriver.FirefoxOptions()
-    options.headless = True
+    # Selenium 4.10+: options.headless is deprecated/no-op. Use the CLI flag.
+    options.add_argument("-headless")
     options.set_preference("browser.download.folderList", 2)
     options.set_preference("browser.download.manager.showWhenStarting", False)
     options.set_preference("browser.download.dir", EXPORT_PATH)
@@ -77,7 +78,7 @@ def run_speedtest():
     options.set_preference("browser.download.panel.shown", False)
     options.binary_location = FIREFOX_PATH
 
-    service = Service(executable_path=GECKODRIVER_PATH)
+    service = Service(executable_path=GECKODRIVER_PATH, log_output="/tmp/geckodriver.log")
     browser = webdriver.Firefox(service=service, options=options)
 
     try:

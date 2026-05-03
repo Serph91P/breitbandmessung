@@ -26,9 +26,11 @@ RUN apk add --no-cache \
     procps-ng \
     gcompat
 
-# Installiere Python-Pakete
+# Installiere Python-Pakete (Versionen gepinnt in requirements.txt -> Dependabot)
+COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir --upgrade pip && \
-    pip3 install --no-cache-dir selenium
+    pip3 install --no-cache-dir -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
 
 # Installiere Geckodriver
 RUN set -eux; \
