@@ -1,0 +1,3 @@
+# Pin Selenium so a future major release can't silently break the container.
+# Bump via Dependabot (configured in .github/dependabot.yml).
+selenium==4.43.0
