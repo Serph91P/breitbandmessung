@@ -13,6 +13,7 @@ from datetime import datetime
 import time
 import subprocess
 import signal
+import tempfile
 import os
 import csv
 import glob
@@ -46,7 +47,8 @@ def cleanup_firefox():
                 pid = int(line.split(None, 1)[0])
                 os.kill(pid, signal.SIGKILL)
 
-        profile_dirs = glob.glob('/tmp/rust_mozprofile*')
+        profile_glob = os.path.join(tempfile.gettempdir(), "rust_mozprofile*")
+        profile_dirs = glob.glob(profile_glob)
         for profile_dir in profile_dirs:
             shutil.rmtree(profile_dir, ignore_errors=True)
     except Exception as e:
@@ -78,7 +80,8 @@ def run_speedtest():
     options.set_preference("browser.download.panel.shown", False)
     options.binary_location = FIREFOX_PATH
 
-    service = Service(executable_path=GECKODRIVER_PATH, log_output="/tmp/geckodriver.log")
+    geckodriver_log = os.path.join(tempfile.gettempdir(), "geckodriver.log")
+    service = Service(executable_path=GECKODRIVER_PATH, log_output=geckodriver_log)
     browser = webdriver.Firefox(service=service, options=options)
 
     try:
